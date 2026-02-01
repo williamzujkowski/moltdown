@@ -274,7 +274,8 @@ cmd_delete_snapshot() {
 
 cmd_pre_run() {
     local vm="$1"
-    local snap="pre-run-$(date +%Y%m%d_%H%M%S)"
+    local snap
+    snap="pre-run-$(date +%Y%m%d_%H%M%S)"
     
     validate_vm_exists "$vm"
     

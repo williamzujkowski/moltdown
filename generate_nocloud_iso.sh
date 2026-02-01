@@ -17,7 +17,8 @@ set -euo pipefail
 #-------------------------------------------------------------------------------
 # Configuration
 #-------------------------------------------------------------------------------
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 readonly AUTOINSTALL_DIR="${SCRIPT_DIR}/autoinstall"
 readonly DEFAULT_OUTPUT="${SCRIPT_DIR}/seed.iso"
 
@@ -226,7 +227,7 @@ main() {
     # Create temp working directory
     local workdir
     workdir=$(mktemp -d)
-    trap "rm -rf '$workdir'" EXIT
+    trap 'rm -rf "$workdir"' EXIT
     
     # Copy source files
     cp "${AUTOINSTALL_DIR}/user-data" "$workdir/"

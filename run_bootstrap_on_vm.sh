@@ -17,9 +17,10 @@ set -euo pipefail
 #-------------------------------------------------------------------------------
 # Configuration
 #-------------------------------------------------------------------------------
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 readonly BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/guest/bootstrap_agent_vm.sh"
-readonly SSH_OPTS="-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
+readonly SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
 
 #-------------------------------------------------------------------------------
 # Functions
@@ -81,7 +82,7 @@ wait_for_ssh() {
     log_info "Waiting for SSH to become available on $host..."
     
     while [[ $attempt -le $max_attempts ]]; do
-        if ssh $SSH_OPTS -o BatchMode=yes "$user@$host" "exit 0" 2>/dev/null; then
+        if ssh "${SSH_OPTS[@]}" -o BatchMode=yes "$user@$host" exit 2>/dev/null; then
             log_info "SSH is available"
             return 0
         fi
@@ -193,18 +194,18 @@ main() {
     
     # Copy bootstrap script
     log_info "Copying bootstrap script to VM..."
-    log_cmd "scp $BOOTSTRAP_SCRIPT $vm_user@$vm_ip:~/bootstrap_agent_vm.sh"
+    log_cmd "scp ${SSH_OPTS[*]} $BOOTSTRAP_SCRIPT $vm_user@$vm_ip:~/bootstrap_agent_vm.sh"
     
     if [[ "$DRY_RUN" != "true" ]]; then
-        scp $SSH_OPTS "$BOOTSTRAP_SCRIPT" "$vm_user@$vm_ip:~/bootstrap_agent_vm.sh"
+        scp "${SSH_OPTS[@]}" "$BOOTSTRAP_SCRIPT" "${vm_user}@${vm_ip}:~/bootstrap_agent_vm.sh"
     fi
     
     # Execute bootstrap
     log_info "Executing bootstrap script on VM..."
-    log_cmd "ssh $vm_user@$vm_ip 'chmod +x ~/bootstrap_agent_vm.sh && ~/bootstrap_agent_vm.sh'"
+    log_cmd "ssh ${SSH_OPTS[*]} $vm_user@$vm_ip 'chmod +x ~/bootstrap_agent_vm.sh && ~/bootstrap_agent_vm.sh'"
     
     if [[ "$DRY_RUN" != "true" ]]; then
-        ssh $SSH_OPTS -t "$vm_user@$vm_ip" "chmod +x ~/bootstrap_agent_vm.sh && ~/bootstrap_agent_vm.sh"
+        ssh "${SSH_OPTS[@]}" -t "${vm_user}@${vm_ip}" "chmod +x ~/bootstrap_agent_vm.sh && ~/bootstrap_agent_vm.sh"
     fi
     
     echo ""

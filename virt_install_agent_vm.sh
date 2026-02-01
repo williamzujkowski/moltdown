@@ -17,7 +17,6 @@ set -euo pipefail
 #-------------------------------------------------------------------------------
 # Configuration
 #-------------------------------------------------------------------------------
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_VERSION="1.0.0"
 
 # VM defaults
@@ -292,7 +291,7 @@ main() {
         --boot uefi
         --cpu host-passthrough
         --features smm.state=on
-        --tpm backend.type=emulator,backend.version=2.0,model=tpm-crb
+        --tpm "backend.type=emulator,backend.version=2.0,model=tpm-crb"
     )
     
     # Add seed ISO if specified
@@ -304,7 +303,7 @@ main() {
     fi
     
     # Add console for headless installs
-    cmd+=(--console pty,target_type=serial)
+    cmd+=(--console "pty,target_type=serial")
     
     # Don't wait for install to complete
     cmd+=(--noautoconsole)

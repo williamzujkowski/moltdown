@@ -28,7 +28,8 @@ set -euo pipefail
 #-------------------------------------------------------------------------------
 readonly SCRIPT_VERSION="1.0.0"
 readonly LOG_DIR="$HOME/logs"
-readonly LOG_FILE="$LOG_DIR/bootstrap_$(date +%Y%m%d_%H%M%S).log"
+LOG_FILE="$LOG_DIR/bootstrap_$(date +%Y%m%d_%H%M%S).log"
+readonly LOG_FILE
 readonly MARKER_DIR="$HOME/.bootstrap_markers"
 readonly ARTIFACTS_DIR="$HOME/work/artifacts"
 readonly REPOS_DIR="$HOME/work/repos"
@@ -136,7 +137,7 @@ phase_security_hardening() {
     
     # SSH hardening
     log_info "Hardening SSH configuration..."
-    sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup.$(date +%Y%m%d)
+    sudo cp /etc/ssh/sshd_config "/etc/ssh/sshd_config.backup.$(date +%Y%m%d)"
     
     sudo tee /etc/ssh/sshd_config.d/99-hardening.conf > /dev/null <<'EOF'
 # Security hardening for agent VM
