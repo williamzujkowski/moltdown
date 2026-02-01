@@ -22,6 +22,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Claude Code local settings
+.claude/
+
 # Secrets - never commit these
 secrets/
 *.pem
