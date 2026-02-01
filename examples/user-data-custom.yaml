@@ -1,0 +1,95 @@
+#cloud-config
+#===============================================================================
+# Example: Customized user-data for specific use cases
+#===============================================================================
+# This shows common customizations. Copy to autoinstall/user-data and modify.
+#
+# Key customizations demonstrated:
+# - Custom username and hostname
+# - SSH key pre-configured
+# - Static IP configuration
+# - Additional packages
+# - Post-install script execution
+#===============================================================================
+
+autoinstall:
+  version: 1
+  
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  
+  # CUSTOMIZE: Change these for your environment
+  identity:
+    hostname: claude-agent-01
+    username: william
+    # Generate: echo 'yourpassword' | openssl passwd -6 -stdin
+    password: "$6$rounds=4096$yoursalt$yourhash"
+  
+  ssh:
+    install-server: true
+    allow-pw: false  # Key-only auth from the start
+    authorized-keys:
+      # CUSTOMIZE: Add your public key(s)
+      - ssh-ed25519 AAAA... your-key-comment
+      # - ssh-rsa AAAA... another-key
+  
+  storage:
+    layout:
+      name: lvm
+      sizing-policy: all
+  
+  # CUSTOMIZE: Static IP example (comment out for DHCP)
+  # network:
+  #   version: 2
+  #   ethernets:
+  #     enp1s0:
+  #       addresses:
+  #         - 192.168.122.100/24
+  #       gateway4: 192.168.122.1
+  #       nameservers:
+  #         addresses:
+  #           - 1.1.1.1
+  #           - 8.8.8.8
+  
+  # DHCP (default)
+  network:
+    version: 2
+    ethernets:
+      enp1s0:
+        dhcp4: true
+      ens3:
+        dhcp4: true
+  
+  # CUSTOMIZE: Additional packages to pre-install
+  packages:
+    - ubuntu-desktop-minimal
+    - openssh-server
+    - qemu-guest-agent
+    - spice-vdagent
+    - curl
+    - wget
+    - git
+    - vim
+    # Add your packages:
+    # - zsh
+    # - neovim
+  
+  updates: security
+  
+  late-commands:
+    - curtin in-target --target=/target -- systemctl enable ssh
+    - curtin in-target --target=/target -- systemctl enable qemu-guest-agent
+    
+    # CUSTOMIZE: Pre-download bootstrap script from your repo
+    # - |
+    #   curl -fsSL https://raw.githubusercontent.com/yourusername/agent-vm-golden-image/main/guest/bootstrap_agent_vm.sh \
+    #     -o /target/home/william/bootstrap_agent_vm.sh
+    # - curtin in-target --target=/target -- chmod +x /home/william/bootstrap_agent_vm.sh
+    # - curtin in-target --target=/target -- chown william:william /home/william/bootstrap_agent_vm.sh
+    
+    # CUSTOMIZE: Clone dotfiles
+    # - curtin in-target --target=/target -- sudo -u william git clone https://github.com/yourusername/dotfiles /home/william/.dotfiles
+
+  # Reboot after installation (change to 'poweroff' to snapshot before first boot)
+  shutdown: reboot

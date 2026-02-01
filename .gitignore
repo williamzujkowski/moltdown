@@ -1,0 +1,39 @@
+# Generated files
+*.iso
+*.qcow2
+*.img
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Secrets - never commit these
+secrets/
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# Local customizations
+local/
+*.local.sh
+user-data.local
+meta-data.local
+
+# Test artifacts
+test-output/

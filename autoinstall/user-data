@@ -1,0 +1,149 @@
+#cloud-config
+autoinstall:
+  version: 1
+  
+  # Locale and keyboard
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  
+  # Identity - customize these!
+  identity:
+    hostname: agent-vm
+    # Default user: agent
+    # Default password: agent (change immediately!)
+    # Generate new hash: echo 'yourpassword' | openssl passwd -6 -stdin
+    username: agent
+    password: "$6$rounds=4096$randomsalt$LJ4vZ8fL9mKGqJ.wPqwh1FbqHmMNVwGwK9kGJB8cGpHqWYPmwvFE5k5.Yqf7vKqYjQzBqwvN5FLbqH8mKGqJ.0"
+  
+  # SSH - enable and allow password auth initially
+  ssh:
+    install-server: true
+    allow-pw: true
+    authorized-keys: []
+    # Add your public key here for passwordless access:
+    # authorized-keys:
+    #   - ssh-ed25519 AAAA... your-key-comment
+  
+  # Storage - use entire disk with LVM
+  storage:
+    layout:
+      name: lvm
+      sizing-policy: all
+  
+  # Network - DHCP
+  network:
+    version: 2
+    ethernets:
+      enp1s0:
+        dhcp4: true
+      ens3:
+        dhcp4: true
+  
+  # Package sources
+  apt:
+    primary:
+      - arches: [default]
+        uri: http://archive.ubuntu.com/ubuntu
+    geoip: true
+  
+  # Packages to install during installation
+  packages:
+    - ubuntu-desktop-minimal
+    - openssh-server
+    - qemu-guest-agent
+    - spice-vdagent
+    - curl
+    - wget
+    - git
+    - vim
+  
+  # Updates
+  updates: security
+  
+  # Late commands - run after installation
+  late-commands:
+    # Enable SSH
+    - curtin in-target --target=/target -- systemctl enable ssh
+    
+    # Enable QEMU guest agent
+    - curtin in-target --target=/target -- systemctl enable qemu-guest-agent
+    
+    # Set up autologin for desktop (optional - comment out for security)
+    - |
+      cat > /target/etc/gdm3/custom.conf << 'GDMEOF'
+      [daemon]
+      AutomaticLoginEnable=true
+      AutomaticLogin=agent
+      
+      [security]
+      
+      [xdmcp]
+      
+      [chooser]
+      
+      [debug]
+      GDMEOF
+    
+    # Create bootstrap download script
+    - |
+      cat > /target/home/agent/download_bootstrap.sh << 'DLEOF'
+      #!/bin/bash
+      # Download the bootstrap script from your preferred location
+      # Customize this URL to your own hosting (GitHub raw, etc.)
+      echo "Bootstrap script location not configured."
+      echo "Copy bootstrap_agent_vm.sh to this VM and run it."
+      DLEOF
+    - curtin in-target --target=/target -- chmod +x /home/agent/download_bootstrap.sh
+    - curtin in-target --target=/target -- chown agent:agent /home/agent/download_bootstrap.sh
+    
+    # Create first-boot message
+    - |
+      cat > /target/home/agent/README.txt << 'READMEEOF'
+      ═══════════════════════════════════════════════════════════════
+      Ubuntu 24.04 Desktop - Agent VM
+      ═══════════════════════════════════════════════════════════════
+      
+      FIRST STEPS:
+      
+      1. Change your password:
+         passwd
+      
+      2. Get your IP address:
+         ip a | grep inet
+      
+      3. Run the bootstrap script:
+         ./bootstrap_agent_vm.sh
+      
+      4. After bootstrap completes:
+         gh auth login
+      
+      5. Shut down and create snapshot:
+         sudo shutdown -h now
+         # On host: ./snapshot_manager.sh create agent-vm dev-ready --offline
+      
+      ═══════════════════════════════════════════════════════════════
+      READMEEOF
+    - curtin in-target --target=/target -- chown agent:agent /home/agent/README.txt
+  
+  # User data to run on first boot (after reboot)
+  user-data:
+    runcmd:
+      # Display IP on console
+      - echo "VM IP:" && ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v 127.0.0.1
+    
+    # Final message
+    final_message: |
+      ═══════════════════════════════════════════════════════════════
+      Ubuntu 24.04 Desktop installation complete!
+      
+      Login: agent / agent (CHANGE THIS PASSWORD!)
+      
+      SSH from host:
+        ssh agent@$(hostname -I | awk '{print $1}')
+      
+      Next: Run bootstrap_agent_vm.sh
+      ═══════════════════════════════════════════════════════════════
+  
+  # Power off after installation (set to 'reboot' for immediate boot)
+  shutdown: reboot
