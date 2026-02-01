@@ -1,0 +1,81 @@
+#cloud-config
+#===============================================================================
+# Cloud-init user-data for Ubuntu Cloud Images
+#===============================================================================
+# Part of moltdown 🦀 - https://github.com/williamzujkowski/moltdown
+#
+# This is cloud-init format (NOT autoinstall format used for ISO installers).
+# Use with Ubuntu Cloud Images: cloud-images.ubuntu.com
+#
+# Usage:
+#   1. Download cloud image: wget https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+#   2. Generate seed ISO with this file
+#   3. Boot VM with --import flag
+#===============================================================================
+
+# User configuration
+users:
+  - name: agent
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    # Password: agent (CHANGE THIS!)
+    # Generate new hash: echo 'yourpassword' | openssl passwd -6 -stdin
+    passwd: "$6$rounds=4096$randomsalt$9oBEQq4ndZ/NWu70e2niTNPNHXwAK7jDmUvPpcvG9/k/Dh4J.omw8IHK5CI94TkQ50Sz8u747yR00Cg4KKC4q/"
+    groups: [sudo, adm, cdrom, dip, plugdev, lpadmin]
+    # Add your SSH key here for passwordless access:
+    # ssh_authorized_keys:
+    #   - ssh-ed25519 AAAA... your-key-comment
+
+# Hostname
+hostname: agent-vm
+
+# Enable password SSH (for initial setup, harden later)
+ssh_pwauth: true
+
+# Package management
+package_update: true
+package_upgrade: true
+
+# Packages to install
+packages:
+  # Desktop environment
+  - ubuntu-desktop-minimal
+  # VM guest tools
+  - qemu-guest-agent
+  - spice-vdagent
+  # Core utilities
+  - openssh-server
+  - curl
+  - wget
+  - git
+  - vim
+
+# Commands to run on first boot
+runcmd:
+  # Enable core services
+  - systemctl enable ssh
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
+  # Set graphical boot target
+  - systemctl set-default graphical.target
+  # Display IP for convenience
+  - echo "VM IP:" && ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v 127.0.0.1
+
+# Message displayed when cloud-init completes
+final_message: |
+  ═══════════════════════════════════════════════════════════════
+  🦀 moltdown - Ubuntu 24.04 Desktop VM Ready
+  ═══════════════════════════════════════════════════════════════
+  
+  Login: agent / agent (CHANGE THIS PASSWORD!)
+  
+  SSH from host:
+    ssh agent@$(hostname -I | awk '{print $1}')
+  
+  Next steps:
+    1. Change password: passwd
+    2. Run bootstrap: ./bootstrap_agent_vm.sh
+    3. Create golden snapshot
+  
+  ═══════════════════════════════════════════════════════════════

@@ -9,13 +9,18 @@
 ## Quick Reference
 
 ```bash
-# Setup & Installation
-./setup.sh                    # One-command setup (downloads ISO, creates VM)
+# Setup & Installation (Cloud Image - Recommended)
+./setup_cloud.sh              # One-command setup using cloud images (fast!)
+./setup_cloud.sh --vm-name my-agent  # Custom VM name
+
+# Setup & Installation (ISO - Alternative)
+./setup.sh                    # One-command setup using ISO installer (slower)
 make install-deps             # Install host dependencies only
 
-# VM Creation
-./generate_nocloud_iso.sh     # Create cloud-init seed ISO
-./virt_install_agent_vm.sh    # Create VM with virt-install
+# VM Creation (Manual)
+./generate_cloud_seed.sh      # Create seed ISO for cloud images
+./generate_nocloud_iso.sh     # Create seed ISO for ISO installer
+./virt_install_agent_vm.sh    # Create VM with virt-install (ISO method)
 
 # Bootstrap (run inside VM)
 ./bootstrap_agent_vm.sh       # Full bootstrap with all phases
@@ -50,13 +55,18 @@ The name comes from molting — shedding old state to emerge fresh.
 
 ```
 moltdown/
-├── setup.sh                     # One-command setup (entry point for new users)
-├── generate_nocloud_iso.sh      # Creates cloud-init seed ISO for autoinstall
-├── virt_install_agent_vm.sh     # Creates VM using virt-install + seed ISO
+├── setup_cloud.sh               # One-command setup using cloud images (RECOMMENDED)
+├── setup.sh                     # One-command setup using ISO installer (alternative)
+├── generate_cloud_seed.sh       # Creates seed ISO for cloud images
+├── generate_nocloud_iso.sh      # Creates seed ISO for ISO installer (autoinstall)
+├── virt_install_agent_vm.sh     # Creates VM using virt-install + ISO
 ├── run_bootstrap_on_vm.sh       # Pushes bootstrap to VM via SSH
 ├── snapshot_manager.sh          # Manages libvirt snapshots (pre-run, post-run, golden)
 ├── guest/
 │   └── bootstrap_agent_vm.sh    # Runs INSIDE the VM to configure it
+├── cloud-init/
+│   ├── user-data                # Cloud-init config template (for cloud images)
+│   └── meta-data                # Cloud-init instance metadata
 ├── autoinstall/
 │   ├── user-data                # Cloud-init autoinstall config (Ubuntu unattended install)
 │   └── meta-data                # Cloud-init instance metadata

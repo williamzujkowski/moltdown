@@ -1,10 +1,11 @@
 # moltdown 🦀 - Makefile
 # https://github.com/williamzujkowski/moltdown
 
-.PHONY: help lint seed-iso install-deps clean test
+.PHONY: help lint seed-iso cloud-seed install-deps clean test setup-cloud setup
 
 SHELL := /bin/bash
 VM_NAME ?= ubuntu2404-agent
+CLOUD_IMG ?= /var/lib/libvirt/images/ubuntu-noble-cloudimg.img
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -13,7 +14,7 @@ lint: ## Run shellcheck on all scripts
 	@echo "Running shellcheck..."
 	@shellcheck -x *.sh guest/*.sh || true
 	@echo "Running yamllint on cloud-init files..."
-	@yamllint autoinstall/ || true
+	@yamllint autoinstall/ cloud-init/ || true
 
 seed-iso: ## Generate cloud-init seed ISO (interactive)
 	./generate_nocloud_iso.sh --customize
@@ -21,18 +22,39 @@ seed-iso: ## Generate cloud-init seed ISO (interactive)
 seed-iso-default: ## Generate seed ISO with defaults
 	./generate_nocloud_iso.sh
 
+cloud-seed: ## Generate cloud-init seed ISO (for cloud images)
+	./generate_cloud_seed.sh
+
+setup-cloud: ## Create VM using cloud images (RECOMMENDED - fast!)
+	./setup_cloud.sh --vm-name $(VM_NAME)
+
+setup: ## Create VM using ISO installer (slower alternative)
+	./setup.sh --vm-name $(VM_NAME)
+
+download-cloud-image: ## Download Ubuntu cloud image
+	@if [ -f "$(CLOUD_IMG)" ]; then \
+		echo "Cloud image already exists: $(CLOUD_IMG)"; \
+	else \
+		echo "Downloading Ubuntu 24.04 cloud image (~600MB)..."; \
+		sudo wget -O $(CLOUD_IMG) https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img; \
+	fi
+
 install-deps: ## Install host dependencies (Ubuntu/Debian)
 	sudo apt update
 	sudo apt install -y \
 		qemu-kvm \
+		qemu-utils \
 		libvirt-daemon-system \
 		libvirt-clients \
 		virtinst \
 		virt-manager \
 		genisoimage \
+		xorriso \
 		openssh-client \
+		sshpass \
 		shellcheck \
-		yamllint
+		yamllint \
+		wget
 
 create-vm: seed.iso ## Create VM with automated installation
 	./virt_install_agent_vm.sh --seed-iso ./seed.iso --name $(VM_NAME)

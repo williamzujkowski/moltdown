@@ -1,0 +1,4 @@
+# Cloud-init meta-data
+# instance-id should be unique per VM instance
+instance-id: moltdown-${RANDOM}
+local-hostname: agent-vm
