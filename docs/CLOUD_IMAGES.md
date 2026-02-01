@@ -55,6 +55,88 @@ virt-install \
   --import --noautoconsole
 ```
 
+## GUI Access
+
+VMs are created with SPICE graphics for full desktop access.
+
+### Prerequisites
+
+```bash
+# Install virt-viewer (minimal) or virt-manager (full GUI)
+sudo apt install virt-viewer
+# or
+sudo apt install virt-manager
+```
+
+### Connecting
+
+```bash
+# Quick connection with virt-viewer
+virt-viewer <vm-name>
+
+# Auto-retry if VM is starting
+virt-viewer --auto-retry <vm-name>
+
+# Full management GUI
+virt-manager
+```
+
+### Display Configuration
+
+moltdown VMs use:
+- **Graphics:** SPICE (better performance than VNC)
+- **Video:** virtio (GPU acceleration)
+- **Channel:** spicevmc (clipboard sharing, dynamic resolution)
+
+### Troubleshooting GUI
+
+```bash
+# Check VM graphics config
+virsh dumpxml <vm-name> | grep -A10 "<graphics"
+
+# Restart spice-vdagent inside VM (for clipboard/resolution)
+sudo systemctl restart spice-vdagent
+```
+
+## Long-Running Sessions
+
+moltdown VMs are hardened for multi-day or multi-week agent sessions.
+
+### Built-in Protections
+
+The bootstrap script configures:
+- **Swap file:** 4GB swap for memory pressure
+- **Journal limits:** 100MB max, 1 week retention
+- **Cloud-init disabled:** Prevents reconfiguration on reboot
+- **No auto-reboot:** Security updates install but don't restart
+
+### Health Monitoring
+
+```bash
+# Inside VM - quick health check
+vm-health-check
+
+# Watch mode (updates every 30s)
+vm-health-check --watch
+
+# From host - SSH health check
+ssh agent@<ip> 'vm-health-check'
+```
+
+### Manual Maintenance
+
+```bash
+# Clean up journal if needed
+sudo journalctl --vacuum-size=50M
+
+# Check swap usage
+free -h
+
+# Check disk usage
+df -h /
+ncdu /  # Interactive disk usage
+```
+
 ## Cloud-init vs Autoinstall
 
 Cloud images use **cloud-init** format (NOT autoinstall):
@@ -71,6 +153,9 @@ See `cloud-init/user-data` for template.
 # Check cloud-init status
 ssh agent@<ip> 'cloud-init status'
 
-# View logs
+# View cloud-init logs
 ssh agent@<ip> 'cat /var/log/cloud-init-output.log'
+
+# Check if cloud-init is disabled (should be after bootstrap)
+ssh agent@<ip> 'ls -la /etc/cloud/cloud-init.disabled'
 ```

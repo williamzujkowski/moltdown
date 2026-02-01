@@ -239,8 +239,9 @@ The `guest/bootstrap_agent_vm.sh` script runs in phases with idempotent markers:
 5. Browser & automation (Chrome, Playwright deps)
 6. Agent tooling (Claude CLI, workspace structure)
 7. Desktop optimization (GNOME tweaks for VM)
-8. Local customizations (if bootstrap_local.sh exists)
-9. Verification
+8. Long-run hardening (swap, cloud-init disable, health check)
+9. Local customizations (if bootstrap_local.sh exists)
+10. Verification
 
 Phases are tracked in `~/.bootstrap_markers/` — re-running skips completed phases.
 
@@ -423,6 +424,35 @@ rm ~/.bootstrap_markers/05-browser-automation.done
 make lint
 ```
 
+### GUI Access
+
+```bash
+# Connect to VM desktop with virt-viewer
+virt-viewer ubuntu2404-agent
+
+# Auto-retry if VM is starting
+virt-viewer --auto-retry ubuntu2404-agent
+
+# Full management GUI
+virt-manager
+```
+
+### Long-Running Sessions
+
+```bash
+# Inside VM: Quick health check
+vm-health-check
+
+# Inside VM: Watch mode (updates every 30s)
+vm-health-check --watch
+
+# From host: Remote health check
+ssh agent@<ip> 'vm-health-check'
+
+# Manual journal cleanup if needed
+ssh agent@<ip> 'sudo journalctl --vacuum-size=50M'
+```
+
 ---
 
 ## Future Improvements / TODOs
@@ -435,4 +465,4 @@ make lint
 
 ---
 
-_Last updated: 2025-02-01 (ET)_
+_Last updated: 2026-02-01 (ET)_

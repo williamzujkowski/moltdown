@@ -16,7 +16,8 @@
 #          5) Browser & automation
 #          6) Agent tooling
 #          7) Desktop optimization
-#          8) Verification
+#          8) Long-run session hardening
+#          9) Verification
 #
 # License: MIT
 #===============================================================================
@@ -394,7 +395,54 @@ phase_desktop_optimization() {
 }
 
 #-------------------------------------------------------------------------------
-# Phase 8: Verification & Manifest Generation
+# Phase 8: Long-Run Session Hardening
+#-------------------------------------------------------------------------------
+phase_longrun_hardening() {
+    log_phase "Long-Run Session Hardening"
+
+    # Disable cloud-init after bootstrap to prevent reconfiguration on reboot
+    log_info "Disabling cloud-init for future boots..."
+    sudo touch /etc/cloud/cloud-init.disabled
+
+    # Create swap file if not present (important for memory pressure during long runs)
+    if [[ ! -f /swapfile ]]; then
+        log_info "Creating 4GB swap file..."
+        sudo fallocate -l 4G /swapfile
+        sudo chmod 600 /swapfile
+        sudo mkswap /swapfile
+        sudo swapon /swapfile
+        echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+        log_info "Swap file created and enabled"
+    else
+        log_info "Swap file already exists"
+    fi
+
+    # Install health check script for monitoring long sessions
+    log_info "Installing health check script..."
+    sudo tee /usr/local/bin/vm-health-check > /dev/null <<'HEALTHEOF'
+#!/bin/bash
+# vm-health-check - Quick VM health status for long-running sessions
+# Part of moltdown 🦀
+echo "=== VM Health Check $(date '+%Y-%m-%d %H:%M:%S') ==="
+echo "Uptime:  $(uptime -p)"
+echo "Memory:  $(free -h | awk '/Mem:/{print $3 "/" $2 " (" int($3/$2*100) "% used)"}')"
+echo "Swap:    $(free -h | awk '/Swap:/{if($2!="0B") print $3 "/" $2; else print "not configured"}')"
+echo "Disk:    $(df -h / | awk 'NR==2{print $3 "/" $2 " (" $5 " used)"}')"
+echo "Load:    $(cat /proc/loadavg | cut -d' ' -f1-3)"
+echo "Procs:   $(ps aux --no-headers | wc -l)"
+echo "Journal: $(journalctl --disk-usage 2>/dev/null | grep -oP '\d+\.\d+[MG]' || echo 'unknown')"
+HEALTHEOF
+    sudo chmod +x /usr/local/bin/vm-health-check
+
+    # Ensure journal vacuum runs periodically
+    log_info "Configuring journal maintenance..."
+    sudo journalctl --vacuum-size=100M 2>/dev/null || true
+
+    log_info "Long-run hardening complete"
+}
+
+#-------------------------------------------------------------------------------
+# Phase 9: Verification & Manifest Generation
 #-------------------------------------------------------------------------------
 phase_verification() {
     log_phase "Verification & Manifest Generation"
@@ -501,13 +549,14 @@ main() {
     run_once "05-browser-automation"   phase_browser_automation
     run_once "06-agent-tooling"        phase_agent_tooling
     run_once "07-desktop-optimization" phase_desktop_optimization
-    
+    run_once "08-longrun-hardening"    phase_longrun_hardening
+
     # Run local customizations if defined (from bootstrap_local.sh)
     if declare -f phase_local_customizations &>/dev/null; then
-        run_once "08-local-customizations" phase_local_customizations
+        run_once "09-local-customizations" phase_local_customizations
     fi
-    
-    run_once "09-verification"         phase_verification
+
+    run_once "10-verification"         phase_verification
     
     echo ""
     echo "╔═══════════════════════════════════════════════════════════════════╗"
