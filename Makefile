@@ -48,8 +48,10 @@ install-deps: ## Install host dependencies (Ubuntu/Debian)
 		libvirt-clients \
 		virtinst \
 		virt-manager \
+		virt-viewer \
 		genisoimage \
 		xorriso \
+		cloud-image-utils \
 		openssh-client \
 		sshpass \
 		shellcheck \

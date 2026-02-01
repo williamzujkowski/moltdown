@@ -415,6 +415,7 @@ cat /var/log/cloud-init-output.log
 **Host system:**
 - libvirt + QEMU/KVM
 - virt-install (`virtinst` package)
+- virt-viewer (for GUI access)
 - genisoimage, mkisofs, or xorriso
 - SSH client
 
@@ -426,9 +427,13 @@ sudo apt install \
     libvirt-clients \
     virtinst \
     virt-manager \
+    virt-viewer \
     genisoimage \
+    cloud-image-utils \
     openssh-client
 ```
+
+Or use: `make install-deps`
 
 ## License
 
