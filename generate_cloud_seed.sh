@@ -90,10 +90,9 @@ main() {
     echo "╚═══════════════════════════════════════════════════════════════════╝"
     echo ""
     
-    # Create temp directory
-    local workdir
-    workdir=$(mktemp -d)
-    trap 'rm -rf "$workdir"' EXIT
+    # Create temp directory (global for trap cleanup)
+    WORKDIR=$(mktemp -d)
+    trap 'rm -rf "$WORKDIR"' EXIT
     
     # Generate password hash if provided
     local passwd_hash
@@ -117,7 +116,7 @@ main() {
     fi
     
     # Generate user-data
-    cat > "$workdir/user-data" << USERDATA
+    cat > "$WORKDIR/user-data" << USERDATA
 #cloud-config
 users:
   - name: ${username}
@@ -130,14 +129,14 @@ USERDATA
 
     # Add SSH key if provided
     if [[ -n "$ssh_key_line" ]]; then
-        cat >> "$workdir/user-data" << SSHKEY
+        cat >> "$WORKDIR/user-data" << SSHKEY
     ssh_authorized_keys:
       - ${ssh_key_line}
 SSHKEY
     fi
     
     # Continue user-data
-    cat >> "$workdir/user-data" << USERDATA
+    cat >> "$WORKDIR/user-data" << USERDATA
 
 hostname: ${hostname}
 ssh_pwauth: true
@@ -149,11 +148,11 @@ USERDATA
 
     # Add packages
     for pkg in $packages; do
-        echo "  - $pkg" >> "$workdir/user-data"
+        echo "  - $pkg" >> "$WORKDIR/user-data"
     done
     
     # Add runcmd
-    cat >> "$workdir/user-data" << 'USERDATA'
+    cat >> "$WORKDIR/user-data" << 'USERDATA'
 
 runcmd:
   - systemctl enable ssh
@@ -162,11 +161,11 @@ runcmd:
 USERDATA
 
     if [[ "$install_desktop" == "true" ]]; then
-        echo "  - systemctl set-default graphical.target" >> "$workdir/user-data"
+        echo "  - systemctl set-default graphical.target" >> "$WORKDIR/user-data"
     fi
     
     # Generate meta-data
-    cat > "$workdir/meta-data" << METADATA
+    cat > "$WORKDIR/meta-data" << METADATA
 instance-id: moltdown-$(date +%s)
 local-hostname: ${hostname}
 METADATA
@@ -175,10 +174,10 @@ METADATA
     log_info "Generating ISO: $output"
     case "$iso_tool" in
         xorriso)
-            xorriso -as mkisofs -o "$output" -V "CIDATA" -J -r "$workdir" 2>/dev/null
+            xorriso -as mkisofs -o "$output" -V "CIDATA" -J -r "$WORKDIR" 2>/dev/null
             ;;
         genisoimage|mkisofs)
-            "$iso_tool" -output "$output" -volid "CIDATA" -joliet -rock "$workdir" 2>/dev/null
+            "$iso_tool" -output "$output" -volid "CIDATA" -joliet -rock "$WORKDIR" 2>/dev/null
             ;;
     esac
     
