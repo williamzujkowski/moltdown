@@ -1,7 +1,7 @@
 # moltdown 🦀 - Makefile
 # https://github.com/williamzujkowski/moltdown
 
-.PHONY: help lint seed-iso cloud-seed install-deps clean test setup-cloud setup
+.PHONY: help lint seed-iso cloud-seed install-deps clean test setup-cloud setup gui start stop status
 
 SHELL := /bin/bash
 VM_NAME ?= ubuntu2404-agent
@@ -80,6 +80,26 @@ ssh: ## SSH into VM (requires VM_IP)
 	else \
 		ssh agent@$(VM_IP); \
 	fi
+
+gui: ## Open VM desktop with virt-viewer
+	@if command -v virt-viewer >/dev/null 2>&1; then \
+		virt-viewer --auto-retry $(VM_NAME); \
+	else \
+		echo "virt-viewer not found. Install with: sudo apt install virt-viewer"; \
+	fi
+
+start: ## Start the VM
+	sudo virsh start $(VM_NAME)
+
+stop: ## Stop the VM gracefully
+	sudo virsh shutdown $(VM_NAME)
+
+status: ## Show VM status and IP
+	@echo "=== VM Status ==="
+	@sudo virsh domstate $(VM_NAME) 2>/dev/null || echo "VM not found"
+	@echo ""
+	@echo "=== VM IP ==="
+	@sudo virsh domifaddr $(VM_NAME) 2>/dev/null || echo "No IP (VM may not be running)"
 
 clean: ## Remove generated ISOs
 	rm -f seed.iso *.iso

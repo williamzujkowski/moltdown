@@ -18,23 +18,33 @@ This toolkit provides:
 
 ## Quick Start
 
-### One-Command Setup
+### One-Command Setup (Recommended)
 
 ```bash
 git clone https://github.com/williamzujkowski/moltdown.git
 cd moltdown
+./setup_cloud.sh
+```
+
+This uses Ubuntu Cloud Images for fast VM creation (~8 minutes to desktop-ready).
+
+### Alternative: ISO Installer
+
+```bash
 ./setup.sh
 ```
 
-This will check dependencies, download the Ubuntu ISO, generate a seed ISO interactively, and create the VM.
+This uses the traditional Ubuntu ISO installer (slower, ~20 minutes).
 
 ### Using Make
 
 ```bash
 make install-deps    # Install host dependencies
-make seed-iso        # Generate cloud-init ISO (interactive)
-make create-vm       # Create VM with automated installation
+make setup-cloud     # Create VM using cloud images (RECOMMENDED)
+make setup           # Create VM using ISO installer
 make golden          # Create golden snapshots after bootstrap
+make gui             # Open VM desktop with virt-viewer
+make ssh             # SSH into VM
 ```
 
 ### Manual Installation
@@ -65,19 +75,26 @@ sudo shutdown -h now
 ```
 moltdown/
 ├── README.md                    # This file
-├── CHANGELOG.md                 # Version history
-├── LICENSE                      # MIT License
+├── CLAUDE.md                    # Development guidelines
 ├── Makefile                     # Common operations
-├── setup.sh                     # One-command setup
-├── generate_nocloud_iso.sh      # Create cloud-init seed ISO
+├── setup_cloud.sh               # One-command setup (cloud images, RECOMMENDED)
+├── setup.sh                     # One-command setup (ISO installer)
+├── generate_cloud_seed.sh       # Create seed ISO for cloud images
+├── generate_nocloud_iso.sh      # Create seed ISO for ISO installer
 ├── virt_install_agent_vm.sh     # Create VM with virt-install
 ├── run_bootstrap_on_vm.sh       # Push bootstrap via SSH
 ├── snapshot_manager.sh          # Manage VM snapshots
+├── cloud-init/
+│   ├── user-data                # Cloud-init config (for cloud images)
+│   └── meta-data                # Cloud-init metadata
 ├── autoinstall/
-│   ├── user-data                # Cloud-init autoinstall config
+│   ├── user-data                # Autoinstall config (for ISO installer)
 │   └── meta-data                # Cloud-init metadata
 ├── guest/
-│   └── bootstrap_agent_vm.sh    # Run inside VM
+│   ├── bootstrap_agent_vm.sh    # Run inside VM
+│   └── vm-health-check.sh       # Health monitoring script
+├── docs/
+│   └── CLOUD_IMAGES.md          # Cloud image workflow docs
 ├── examples/
 │   ├── bootstrap_local.sh       # Local customization template
 │   └── user-data-custom.yaml    # Customized autoinstall example
@@ -85,6 +102,20 @@ moltdown/
     └── workflows/
         └── lint.yml             # ShellCheck + yamllint CI
 ```
+
+## GUI Access
+
+VMs are created with SPICE graphics for full desktop access.
+
+```bash
+# Connect with virt-viewer (minimal)
+virt-viewer ubuntu2404-agent
+
+# Or use virt-manager for full GUI management
+virt-manager
+```
+
+Install GUI tools: `sudo apt install virt-viewer` or `sudo apt install virt-manager`
 
 ## Agent Workflow
 
@@ -101,6 +132,21 @@ scp agent@<vm-ip>:~/work/artifacts/* ./local-artifacts/
 
 # Reset to clean state
 ./snapshot_manager.sh post-run ubuntu2404-agent
+```
+
+## Long-Running Sessions
+
+VMs are hardened for multi-day or multi-week agent sessions:
+
+- **Swap file**: 4GB for memory pressure
+- **Journal limits**: 100MB max, prevents disk fill
+- **No auto-reboot**: Security updates don't restart
+- **Cloud-init disabled**: Prevents reconfiguration
+
+Monitor health inside VM:
+```bash
+vm-health-check           # Quick status
+vm-health-check --watch   # Live monitoring
 ```
 
 ## Scripts Reference
