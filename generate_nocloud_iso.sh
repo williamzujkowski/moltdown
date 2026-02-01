@@ -224,35 +224,34 @@ main() {
         exit 1
     fi
     
-    # Create temp working directory
-    local workdir
-    workdir=$(mktemp -d)
-    trap 'rm -rf "$workdir"' EXIT
+    # Create temp working directory (global for trap access)
+    WORKDIR=$(mktemp -d)
+    trap 'rm -rf "$WORKDIR"' EXIT
     
     # Copy source files
-    cp "${AUTOINSTALL_DIR}/user-data" "$workdir/"
-    cp "${AUTOINSTALL_DIR}/meta-data" "$workdir/"
+    cp "${AUTOINSTALL_DIR}/user-data" "$WORKDIR/"
+    cp "${AUTOINSTALL_DIR}/meta-data" "$WORKDIR/"
     
     # Interactive customization
     if [[ "$customize" == "true" ]]; then
-        customize_interactive "$workdir"
+        customize_interactive "$WORKDIR"
     else
         # Apply command-line customizations
         if [[ -n "$username" ]]; then
-            sed -i "s/username: .*/username: $username/" "${workdir}/user-data"
+            sed -i "s/username: .*/username: $username/" "${WORKDIR}/user-data"
             log_info "Username set to: $username"
         fi
         
         if [[ -n "$password" ]]; then
             local password_hash
             password_hash=$(hash_password "$password")
-            sed -i "s|password: .*|password: \"$password_hash\"|" "${workdir}/user-data"
+            sed -i "s|password: .*|password: \"$password_hash\"|" "${WORKDIR}/user-data"
             log_info "Password set (hashed)"
         fi
         
         if [[ -n "$hostname" ]]; then
-            sed -i "s/hostname: .*/hostname: $hostname/" "${workdir}/user-data"
-            sed -i "s/local-hostname: .*/local-hostname: $hostname/" "${workdir}/meta-data"
+            sed -i "s/hostname: .*/hostname: $hostname/" "${WORKDIR}/user-data"
+            sed -i "s/local-hostname: .*/local-hostname: $hostname/" "${WORKDIR}/meta-data"
             log_info "Hostname set to: $hostname"
         fi
         
@@ -260,7 +259,7 @@ main() {
             if [[ -f "$ssh_key_file" ]]; then
                 local ssh_key
                 ssh_key=$(cat "$ssh_key_file")
-                sed -i "/authorized-keys:/a\\    - $ssh_key" "${workdir}/user-data"
+                sed -i "/authorized-keys:/a\\    - $ssh_key" "${WORKDIR}/user-data"
                 log_info "SSH key added from: $ssh_key_file"
             else
                 log_error "SSH key file not found: $ssh_key_file"
@@ -279,7 +278,7 @@ main() {
                 -volid cidata \
                 -joliet \
                 -rock \
-                "$workdir"
+                "$WORKDIR"
             ;;
         xorriso)
             xorriso \
@@ -288,7 +287,7 @@ main() {
                 -V cidata \
                 -J \
                 -r \
-                "$workdir"
+                "$WORKDIR"
             ;;
     esac
     
