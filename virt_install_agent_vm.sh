@@ -27,7 +27,7 @@ DEFAULT_DISK_SIZE="50" # GB
 DEFAULT_DISK_PATH="/var/lib/libvirt/images"
 
 # Ubuntu 24.04 ISO - update this path
-DEFAULT_ISO_PATH="/var/lib/libvirt/images/ubuntu-24.04.1-desktop-amd64.iso"
+DEFAULT_ISO_PATH="/var/lib/libvirt/images/ubuntu-24.04-desktop-amd64.iso"
 
 # Network
 DEFAULT_NETWORK="default"
@@ -139,11 +139,11 @@ download_iso_prompt() {
     log_warn "Ubuntu ISO not found at: $iso_path"
     echo ""
     echo "Download Ubuntu 24.04 Desktop:"
-    echo "  https://releases.ubuntu.com/24.04/ubuntu-24.04.1-desktop-amd64.iso"
+    echo "  https://releases.ubuntu.com/24.04/ubuntu-24.04-desktop-amd64.iso"
     echo ""
     echo "Or use wget:"
     echo "  sudo wget -P /var/lib/libvirt/images/ \\"
-    echo "    https://releases.ubuntu.com/24.04/ubuntu-24.04.1-desktop-amd64.iso"
+    echo "    https://releases.ubuntu.com/24.04/ubuntu-24.04-desktop-amd64.iso"
     echo ""
 }
 
