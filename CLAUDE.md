@@ -60,6 +60,11 @@ systemctl status claude-watchdog  # Check watchdog service
 make lint                     # Run shellcheck + yamllint
 shellcheck -x *.sh guest/*.sh # Manual shellcheck
 
+# Claude Code Integration
+./setup-hooks.sh              # Install Claude Code hooks (shellcheck, context)
+./setup-hooks.sh --dry-run    # Preview hook changes
+./setup-hooks.sh --remove     # Remove hooks
+
 # GitHub CLI
 gh issue create               # Create issue
 gh issue list                 # List issues
@@ -502,6 +507,70 @@ When working with this codebase, ensure:
 
 ---
 
+## Claude Code Integration
+
+### Skills
+
+The `/moltdown` skill provides quick reference for VM workflows:
+
+```bash
+# In Claude Code, type:
+/moltdown                    # Show quick reference
+/moltdown snapshot           # Help with snapshot commands
+```
+
+Skill location: `.claude/skills/moltdown/SKILL.md`
+
+### Hooks
+
+Configure Claude Code hooks for automatic shell script validation:
+
+```bash
+# Install hooks
+./setup-hooks.sh
+
+# Preview without changes
+./setup-hooks.sh --dry-run
+
+# Remove hooks
+./setup-hooks.sh --remove
+```
+
+**Installed hooks:**
+
+| Hook | Event | Purpose |
+|------|-------|---------|
+| `shellcheck-on-write.sh` | PostToolUse[Write\|Edit] | Lint .sh files after modification |
+| `session-context.sh` | SessionStart[startup] | Inject project context |
+| `validate-bash.sh` | PreToolUse[Bash] | Block dangerous VM commands |
+
+Hook scripts: `.claude/hooks/`
+Hook config: `.claude/settings.json`
+
+### Manual Hook Configuration
+
+If you prefer manual setup, add to `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/shellcheck-on-write.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+---
+
 ## Future Improvements / TODOs
 
 - [ ] Support for other distros (Fedora, Debian)
@@ -512,4 +581,4 @@ When working with this codebase, ensure:
 
 ---
 
-_Last updated: 2026-02-02 (ET)_
+_Last updated: 2026-02-02 (ET) - Added Claude Code hooks and skills_

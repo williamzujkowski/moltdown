@@ -23,8 +23,9 @@ Thumbs.db
 *.swp
 *.swo
 
-# Claude Code local settings
-.claude/
+# Claude Code local settings (keep skills and hooks, ignore local settings)
+.claude/settings.local.json
+.claude/*.bak
 
 # MCP server config (local)
 .mcp.json
