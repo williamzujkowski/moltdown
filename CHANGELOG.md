@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated README with quick reference table
 - Updated README with shell aliases
 
+### Fixed
+- CI shellcheck warnings (SC2155, SC2088)
+- Pinned GitHub Actions to stable versions (ludeeus/action-shellcheck@2.0.0, ibiqlik/action-yamllint@v3.1.1)
+- Updated golden image dependencies (npm 11.8.0, corepack 0.34.6, nexus-agents latest)
+
 ## [1.1.0] - 2026-02-01
 
 ### Added
