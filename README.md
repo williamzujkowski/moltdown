@@ -100,9 +100,15 @@ sudo shutdown -h now
 moltdown/
 ├── README.md                    # This file
 ├── CLAUDE.md                    # Development guidelines
+├── RESOURCES.md                 # Memory planning for parallel agents
+├── CHANGELOG.md                 # Release history
 ├── Makefile                     # Common operations
+├── agent.sh                     # One-command agent VM creation
 ├── setup_cloud.sh               # One-command setup (cloud images, RECOMMENDED)
 ├── setup.sh                     # One-command setup (ISO installer)
+├── update-golden.sh             # Update golden image CLIs and auth
+├── sync-ai-auth.sh              # Sync AI CLI auth to VMs
+├── code-connect.sh              # VS Code Remote SSH connection
 ├── generate_cloud_seed.sh       # Create seed ISO for cloud images
 ├── generate_nocloud_iso.sh      # Create seed ISO for ISO installer
 ├── virt_install_agent_vm.sh     # Create VM with virt-install
@@ -116,8 +122,7 @@ moltdown/
 │   ├── user-data                # Autoinstall config (for ISO installer)
 │   └── meta-data                # Cloud-init metadata
 ├── guest/
-│   ├── bootstrap_agent_vm.sh    # Run inside VM
-│   └── vm-health-check.sh       # Health monitoring script
+│   └── bootstrap_agent_vm.sh    # Run inside VM (includes health check)
 ├── docs/
 │   └── CLOUD_IMAGES.md          # Cloud image workflow docs
 ├── examples/
@@ -244,16 +249,24 @@ images stay in `/var/lib/libvirt/images/` and are excluded by `.gitignore`.
 
 VMs are hardened for multi-day or multi-week agent sessions:
 
-- **Swap file**: 4GB for memory pressure
+- **Swap file**: 8GB for memory pressure (Claude CLI can leak to 13GB+)
 - **Journal limits**: 100MB max, prevents disk fill
 - **No auto-reboot**: Security updates don't restart
 - **Cloud-init disabled**: Prevents reconfiguration
+- **Memory watchdog**: Auto-kills runaway Claude CLI processes at 13GB threshold
+- **cgroups limits**: Optional hard memory limits via `run-claude-limited`
 
 Monitor health inside VM:
 ```bash
-vm-health-check           # Quick status
-vm-health-check --watch   # Live monitoring
+vm-health-check              # Quick status with Claude memory tracking
+vm-health-check --watch      # Live monitoring (30s refresh)
+vm-health-check --trend      # Memory trend analysis with OOM prediction
+run-claude-limited           # Run Claude with 12GB memory limit
+run-claude-limited 8G        # Run with custom limit
+agent-session                # Persistent tmux session with auto-reattach
 ```
+
+See [RESOURCES.md](RESOURCES.md) for detailed memory planning and parallel agent deployment guidance.
 
 ## Scripts Reference
 

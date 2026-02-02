@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "nexus-agents": {
-      "command": "nexus-agents",
-      "args": ["--mode=server"]
-    }
-  }
-}
