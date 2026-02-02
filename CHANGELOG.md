@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-02-02
+
 ### Added
 - `agent.sh` - One command to spin up and connect to agent VM
 - `update-golden.sh` - Update golden image CLIs and auth
@@ -42,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pinned GitHub Actions to stable versions (ludeeus/action-shellcheck@2.0.0, ibiqlik/action-yamllint@v3.1.1)
 - Updated golden image dependencies (npm 11.8.0, corepack 0.34.6, nexus-agents latest)
 - Removed `.mcp.json` from git tracking (local MCP config should not be shared)
+- Removed vestigial `guest/vm-health-check.sh` (now embedded in bootstrap)
 
 ## [1.1.0] - 2026-02-01
 
@@ -93,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - UFW firewall configuration
 - Unattended security upgrades
 
-[Unreleased]: https://github.com/williamzujkowski/moltdown/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/williamzujkowski/moltdown/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/williamzujkowski/moltdown/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/williamzujkowski/moltdown/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/williamzujkowski/moltdown/releases/tag/v1.0.0
