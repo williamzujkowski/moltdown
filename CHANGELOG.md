@@ -13,8 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-installed nexus-agents MCP server
 - SSH commit signing configured by default
 - Makefile target: `sync-auth`
+- Golden image now includes full authentication (Claude OAuth, GitHub token, Codex, Gemini)
+- Clones inherit all authentication - no setup required
 
 ### Changed
+- Updated README with authenticated golden image quick start
 - Updated README with AI CLI sync documentation
 
 ## [1.1.0] - 2026-02-01

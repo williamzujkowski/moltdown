@@ -15,8 +15,30 @@ This toolkit provides:
 - **Snapshot Management**: Pre/post agent-run snapshots for clean state management
 - **Idempotent Operations**: Re-runnable scripts with phase markers
 - **Local Customization**: Override defaults without modifying core scripts
+- **Pre-authenticated AI CLIs**: Claude Code, Codex, Gemini, and GitHub CLI ready to use
 
-## Quick Start
+## Quick Start (Pre-Authenticated Golden Image)
+
+If you already have a golden image with authentication baked in:
+
+```bash
+# Create and start a clone
+./clone_manager.sh create moltdown-integration-test --linked
+./clone_manager.sh start moltdown-clone-xxx
+
+# Get the IP
+virsh domifaddr moltdown-clone-xxx
+
+# SSH in - all CLIs work immediately!
+ssh agent@<ip>
+claude "explain this codebase"
+codex "fix the tests"
+gh pr create
+```
+
+No authentication needed - everything is inherited from the golden image.
+
+## Quick Start (New Setup)
 
 ### One-Command Setup (Recommended)
 
