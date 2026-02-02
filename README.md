@@ -472,6 +472,36 @@ sudo apt install \
 
 Or use: `make install-deps`
 
+## Security Notes
+
+### What's in the Git Repo vs Local Machine
+
+| Content | Location | In Git? |
+|---------|----------|---------|
+| Shell scripts, docs | This repo | ✅ Yes |
+| VM disk images (.qcow2) | `/var/lib/libvirt/images/` | ❌ No |
+| Cloud-init seed ISOs | Generated locally | ❌ No |
+| Your SSH keys | Inside VM disk + `~/.ssh/` | ❌ No |
+| Passwords/credentials | Inside VM disk | ❌ No |
+
+**Your VM disk images never leave your machine.** The golden image containing your SSH keys, user accounts, and any work done inside VMs is stored only in libvirt's local image directory.
+
+The `.gitignore` explicitly excludes:
+- `*.qcow2` - VM disk images
+- `*.img` - Disk images
+- `*.iso` - ISO images including cloud-init seeds
+
+### SSH Key Security
+
+When you add your SSH public key to the golden image:
+- Only your **public** key is added (safe to share by design)
+- Your **private** key never leaves `~/.ssh/` on your host
+- The public key lives inside the VM's disk image (not in git)
+
+### Cloud-Init Credentials
+
+The `cloud-init/user-data` template in this repo contains **example** credentials. When you run `generate_cloud_seed.sh`, you provide your own credentials which are written to a local `seed.iso` that is **not** committed to git.
+
 ## License
 
 MIT License - feel free to adapt for your workflows.

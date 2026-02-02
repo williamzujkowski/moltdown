@@ -464,6 +464,28 @@ ssh agent@<ip> 'sudo journalctl --vacuum-size=50M'
 
 ---
 
+## Security Considerations
+
+**Local-only data (NOT in git):**
+- VM disk images (`/var/lib/libvirt/images/` or `/var/tmp/`)
+- Generated seed ISOs (`seed.iso`)
+- SSH keys inside VMs
+- User credentials
+
+**In git repo:**
+- Shell scripts only
+- Documentation
+- Templates (with example/placeholder credentials)
+
+The `.gitignore` excludes all disk images and ISOs. Never commit files from `/var/lib/libvirt/images/`.
+
+When working with this codebase, ensure:
+- Never add `*.qcow2`, `*.img`, or `*.iso` files to git
+- Never commit real SSH private keys
+- Template files contain only example credentials (the actual credentials are provided at runtime)
+
+---
+
 ## Future Improvements / TODOs
 
 - [ ] Support for other distros (Fedora, Debian)
