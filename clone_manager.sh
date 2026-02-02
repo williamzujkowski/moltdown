@@ -32,7 +32,6 @@ set -euo pipefail
 SCRIPT_NAME="$(basename "$0")"
 readonly SCRIPT_NAME
 readonly CLONE_PREFIX="moltdown-clone"
-readonly LIBVIRT_IMAGES="/var/lib/libvirt/images"
 
 # Colors for output
 readonly RED='\033[0;31m'
@@ -52,11 +51,33 @@ log_step()  { echo -e "${BLUE}[STEP]${NC}  $*"; }
 #-------------------------------------------------------------------------------
 # Helper Functions
 #-------------------------------------------------------------------------------
+
+# Detect if we need sudo for virsh (set VIRSH variable)
+VIRSH="virsh"
+SUDO=""
+detect_virsh_sudo() {
+    # Try without sudo first
+    if virsh list &>/dev/null; then
+        VIRSH="virsh"
+        SUDO=""
+    elif sudo -n virsh list &>/dev/null; then
+        VIRSH="sudo virsh"
+        SUDO="sudo"
+    elif sudo virsh list &>/dev/null; then
+        VIRSH="sudo virsh"
+        SUDO="sudo"
+    else
+        log_error "Cannot access libvirt. Check permissions or run with sudo."
+        exit 1
+    fi
+}
+
 check_virsh() {
     if ! command -v virsh &>/dev/null; then
         log_error "virsh not found. Install with: sudo apt install libvirt-clients"
         exit 1
     fi
+    detect_virsh_sudo
 }
 
 check_virt_clone() {
@@ -68,19 +89,19 @@ check_virt_clone() {
 
 vm_exists() {
     local vm_name="$1"
-    sudo virsh dominfo "$vm_name" &>/dev/null
+    $VIRSH dominfo "$vm_name" &>/dev/null
 }
 
 vm_is_running() {
     local vm_name="$1"
     local state
-    state=$(sudo virsh domstate "$vm_name" 2>/dev/null || echo "unknown")
+    state=$($VIRSH domstate "$vm_name" 2>/dev/null || echo "unknown")
     [[ "$state" == "running" ]]
 }
 
 get_vm_disk() {
     local vm_name="$1"
-    sudo virsh domblklist "$vm_name" --details 2>/dev/null | \
+    $VIRSH domblklist "$vm_name" --details 2>/dev/null | \
         awk '/disk/{print $4}' | head -1
 }
 
@@ -180,7 +201,10 @@ cmd_create() {
         exit 1
     fi
 
-    local clone_disk="${LIBVIRT_IMAGES}/${clone_name}.qcow2"
+    # Put clone disk in same directory as source disk
+    local source_dir
+    source_dir=$(dirname "$source_disk")
+    local clone_disk="${source_dir}/${clone_name}.qcow2"
 
     echo "╔═══════════════════════════════════════════════════════════════════╗"
     echo "║            🦀 moltdown - Clone Creation                           ║"
@@ -201,7 +225,7 @@ cmd_create() {
     # Check if source VM is running (must be stopped for clean clone)
     if vm_is_running "$source_vm"; then
         log_warn "Source VM is running. For best results, stop it first:"
-        log_warn "  sudo virsh shutdown $source_vm"
+        log_warn "  $VIRSH shutdown $source_vm"
         echo ""
         read -p "Continue anyway? (y/N) " -n 1 -r
         echo
@@ -224,18 +248,18 @@ cmd_create() {
         log_step "Creating linked clone disk..."
 
         # For linked clone, create a new disk backed by the source
-        sudo qemu-img create -f qcow2 -b "$source_disk" -F qcow2 "$clone_disk"
+        $SUDO qemu-img create -f qcow2 -b "$source_disk" -F qcow2 "$clone_disk"
 
         log_step "Creating VM definition from source..."
         # Use virt-clone with the pre-created disk
-        sudo virt-clone \
+        $SUDO virt-clone \
             --original "$source_vm" \
             --name "$clone_name" \
             --preserve-data \
             --file "$clone_disk"
     else
         log_step "Creating full clone (this may take a while)..."
-        sudo virt-clone \
+        $SUDO virt-clone \
             --original "$source_vm" \
             --name "$clone_name" \
             --file "$clone_disk"
@@ -244,23 +268,23 @@ cmd_create() {
     # Apply resource overrides if specified
     if [[ -n "$vcpus" ]]; then
         log_step "Setting vCPUs to $vcpus..."
-        sudo virsh setvcpus "$clone_name" "$vcpus" --config --maximum
-        sudo virsh setvcpus "$clone_name" "$vcpus" --config
+        $VIRSH setvcpus "$clone_name" "$vcpus" --config --maximum
+        $VIRSH setvcpus "$clone_name" "$vcpus" --config
     fi
 
     if [[ -n "$memory" ]]; then
         log_step "Setting memory to ${memory}MB..."
-        sudo virsh setmaxmem "$clone_name" "${memory}M" --config
-        sudo virsh setmem "$clone_name" "${memory}M" --config
+        $VIRSH setmaxmem "$clone_name" "${memory}M" --config
+        $VIRSH setmem "$clone_name" "${memory}M" --config
     fi
 
     echo ""
     log_info "Clone '$clone_name' created successfully!"
     echo ""
     echo "Next steps:"
-    echo "  Start:   sudo virsh start $clone_name"
+    echo "  Start:   $VIRSH start $clone_name"
     echo "  GUI:     virt-viewer $clone_name"
-    echo "  SSH:     ssh agent@\$(sudo virsh domifaddr $clone_name | awk '/ipv4/{print \$4}' | cut -d/ -f1)"
+    echo "  SSH:     ssh agent@\$($VIRSH domifaddr $clone_name | awk '/ipv4/{print \$4}' | cut -d/ -f1)"
     echo "  Delete:  $SCRIPT_NAME delete $clone_name"
 }
 
@@ -281,7 +305,7 @@ cmd_list() {
 
     local found=false
     local vm_list
-    vm_list=$(sudo virsh list --all --name 2>/dev/null | grep "^${CLONE_PREFIX}" || true)
+    vm_list=$($VIRSH list --all --name 2>/dev/null | grep "^${CLONE_PREFIX}" || true)
 
     if [[ -z "$vm_list" ]]; then
         log_info "No clones found"
@@ -303,7 +327,7 @@ cmd_list() {
         fi
 
         local state
-        state=$(sudo virsh domstate "$clone_name" 2>/dev/null || echo "unknown")
+        state=$($VIRSH domstate "$clone_name" 2>/dev/null || echo "unknown")
 
         local disk_size="unknown"
         local disk_path
@@ -345,7 +369,7 @@ cmd_delete() {
     # Safety check: only delete clones, not source VMs
     if ! is_clone "$clone_name"; then
         log_error "VM '$clone_name' is not a moltdown clone (doesn't start with '$CLONE_PREFIX')"
-        log_error "Use 'sudo virsh undefine' directly if you really want to delete it"
+        log_error "Use '$VIRSH undefine' directly if you really want to delete it"
         exit 1
     fi
 
@@ -354,7 +378,7 @@ cmd_delete() {
     # Stop if running
     if vm_is_running "$clone_name"; then
         log_step "Stopping clone..."
-        sudo virsh destroy "$clone_name" 2>/dev/null || true
+        $VIRSH destroy "$clone_name" 2>/dev/null || true
     fi
 
     # Get disk path before undefining
@@ -363,13 +387,13 @@ cmd_delete() {
 
     # Undefine VM
     log_step "Removing VM definition..."
-    sudo virsh undefine "$clone_name" --remove-all-storage 2>/dev/null || \
-        sudo virsh undefine "$clone_name" 2>/dev/null
+    $VIRSH undefine "$clone_name" --remove-all-storage 2>/dev/null || \
+        $VIRSH undefine "$clone_name" 2>/dev/null
 
     # Remove disk if it still exists (belt and suspenders)
     if [[ -n "$disk_path" && -f "$disk_path" ]]; then
         log_step "Removing disk image..."
-        sudo rm -f "$disk_path"
+        $SUDO rm -f "$disk_path"
     fi
 
     log_info "Clone '$clone_name' deleted"
@@ -399,7 +423,7 @@ cmd_cleanup() {
 
     local clones=()
     local vm_list
-    vm_list=$(sudo virsh list --all --name 2>/dev/null | grep "^${CLONE_PREFIX}-${source_vm}-" || true)
+    vm_list=$($VIRSH list --all --name 2>/dev/null | grep "^${CLONE_PREFIX}-${source_vm}-" || true)
 
     if [[ -z "$vm_list" ]]; then
         log_info "No clones found for source VM '$source_vm'"
@@ -458,13 +482,13 @@ cmd_start() {
     fi
 
     log_info "Starting clone '$clone_name'..."
-    sudo virsh start "$clone_name"
+    $VIRSH start "$clone_name"
 
     log_info "Clone started. Waiting for IP..."
     sleep 5
 
     local ip
-    ip=$(sudo virsh domifaddr "$clone_name" 2>/dev/null | awk '/ipv4/{print $4}' | cut -d/ -f1)
+    ip=$($VIRSH domifaddr "$clone_name" 2>/dev/null | awk '/ipv4/{print $4}' | cut -d/ -f1)
     if [[ -n "$ip" ]]; then
         log_info "Clone IP: $ip"
         echo ""
@@ -472,7 +496,7 @@ cmd_start() {
         echo "  GUI: virt-viewer $clone_name"
         echo "  SSH: ssh agent@$ip"
     else
-        log_warn "IP not yet available. Check with: sudo virsh domifaddr $clone_name"
+        log_warn "IP not yet available. Check with: $VIRSH domifaddr $clone_name"
     fi
 }
 
@@ -505,10 +529,10 @@ cmd_stop() {
 
     if $force; then
         log_info "Force stopping clone '$clone_name'..."
-        sudo virsh destroy "$clone_name"
+        $VIRSH destroy "$clone_name"
     else
         log_info "Gracefully stopping clone '$clone_name'..."
-        sudo virsh shutdown "$clone_name"
+        $VIRSH shutdown "$clone_name"
         log_info "Shutdown signal sent. Clone will stop shortly."
     fi
 }
@@ -534,12 +558,12 @@ cmd_status() {
         echo ""
 
         local state
-        state=$(sudo virsh domstate "$clone_name" 2>/dev/null || echo "unknown")
+        state=$($VIRSH domstate "$clone_name" 2>/dev/null || echo "unknown")
         echo "State:  $state"
 
         if [[ "$state" == "running" ]]; then
             local ip
-            ip=$(sudo virsh domifaddr "$clone_name" 2>/dev/null | awk '/ipv4/{print $4}' | cut -d/ -f1)
+            ip=$($VIRSH domifaddr "$clone_name" 2>/dev/null | awk '/ipv4/{print $4}' | cut -d/ -f1)
             echo "IP:     ${ip:-pending...}"
         fi
 
