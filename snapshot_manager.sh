@@ -77,7 +77,22 @@ EOF
 log_info()  { echo "[INFO]  $*"; }
 log_warn()  { echo "[WARN]  $*"; }
 log_error() { echo "[ERROR] $*" >&2; }
-log_cmd()   { echo "[CMD]   sudo virsh $*"; }
+log_cmd()   { echo "[CMD]   $VIRSH $*"; }
+
+# Detect if we need sudo for virsh
+VIRSH="virsh"
+detect_virsh_sudo() {
+    if virsh list &>/dev/null; then
+        VIRSH="virsh"
+    elif sudo -n virsh list &>/dev/null; then
+        VIRSH="sudo virsh"
+    elif sudo virsh list &>/dev/null; then
+        VIRSH="sudo virsh"
+    else
+        log_error "Cannot access libvirt. Check permissions or run with sudo."
+        exit 1
+    fi
+}
 
 #-------------------------------------------------------------------------------
 # Validation
@@ -87,19 +102,16 @@ check_prerequisites() {
         log_error "virsh command not found. Install libvirt-clients."
         exit 1
     fi
-    
-    if ! sudo virsh list --all &>/dev/null; then
-        log_error "Cannot connect to libvirt. Check permissions and libvirtd service."
-        exit 1
-    fi
+
+    detect_virsh_sudo
 }
 
 validate_vm_exists() {
     local vm="$1"
-    if ! sudo virsh dominfo "$vm" &>/dev/null; then
+    if ! $VIRSH dominfo "$vm" &>/dev/null; then
         log_error "VM '$vm' not found"
         log_info "Available VMs:"
-        sudo virsh list --all --name | grep -v '^$' | sed 's/^/  /'
+        $VIRSH list --all --name | grep -v '^$' | sed 's/^/  /'
         exit 1
     fi
 }
@@ -107,17 +119,17 @@ validate_vm_exists() {
 validate_snapshot_exists() {
     local vm="$1"
     local snap="$2"
-    if ! sudo virsh snapshot-info "$vm" "$snap" &>/dev/null; then
+    if ! $VIRSH snapshot-info "$vm" "$snap" &>/dev/null; then
         log_error "Snapshot '$snap' not found for VM '$vm'"
         log_info "Available snapshots:"
-        sudo virsh snapshot-list "$vm" --name | grep -v '^$' | sed 's/^/  /'
+        $VIRSH snapshot-list "$vm" --name | grep -v '^$' | sed 's/^/  /'
         exit 1
     fi
 }
 
 get_vm_state() {
     local vm="$1"
-    sudo virsh domstate "$vm" 2>/dev/null | tr -d '[:space:]'
+    $VIRSH domstate "$vm" 2>/dev/null | tr -d '[:space:]'
 }
 
 #-------------------------------------------------------------------------------
@@ -126,7 +138,7 @@ get_vm_state() {
 cmd_list_vms() {
     log_info "Available VMs:"
     echo ""
-    sudo virsh list --all
+    $VIRSH list --all
 }
 
 cmd_list_snapshots() {
@@ -135,12 +147,12 @@ cmd_list_snapshots() {
     
     log_info "Snapshots for VM '$vm':"
     echo ""
-    sudo virsh snapshot-list "$vm" --tree
+    $VIRSH snapshot-list "$vm" --tree
     echo ""
     
     # Show current snapshot
     local current
-    current=$(sudo virsh snapshot-current "$vm" --name 2>/dev/null || echo "none")
+    current=$($VIRSH snapshot-current "$vm" --name 2>/dev/null || echo "none")
     log_info "Current snapshot: $current"
 }
 
@@ -151,7 +163,7 @@ cmd_snapshot_info() {
     validate_vm_exists "$vm"
     validate_snapshot_exists "$vm" "$snap"
     
-    sudo virsh snapshot-info "$vm" "$snap"
+    $VIRSH snapshot-info "$vm" "$snap"
 }
 
 cmd_create_snapshot() {
@@ -167,7 +179,7 @@ cmd_create_snapshot() {
     
     if [[ "$offline" == "true" && "$state" == "running" ]]; then
         log_warn "VM is running. Shutting down for clean snapshot..."
-        sudo virsh shutdown "$vm"
+        $VIRSH shutdown "$vm"
         
         # Wait for shutdown
         local timeout=60
@@ -182,7 +194,7 @@ cmd_create_snapshot() {
             log_error "VM did not shut down in time. Force shutdown? (y/n)"
             read -r response
             if [[ "$response" == "y" ]]; then
-                sudo virsh destroy "$vm"
+                $VIRSH destroy "$vm"
                 sleep 2
             else
                 exit 1
@@ -199,7 +211,7 @@ cmd_create_snapshot() {
     fi
     
     log_cmd "snapshot-create-as $vm $snap --description \"$desc\" --atomic"
-    sudo virsh snapshot-create-as "$vm" "$snap" \
+    $VIRSH snapshot-create-as "$vm" "$snap" \
         --description "$desc" \
         --atomic
     
@@ -223,24 +235,24 @@ cmd_revert_snapshot() {
     
     if [[ "$state" == "running" ]]; then
         log_info "Stopping VM before revert..."
-        sudo virsh destroy "$vm" 2>/dev/null || true
+        $VIRSH destroy "$vm" 2>/dev/null || true
         sleep 2
     fi
     
     log_cmd "snapshot-revert $vm $snap"
-    sudo virsh snapshot-revert "$vm" "$snap"
+    $VIRSH snapshot-revert "$vm" "$snap"
     
     log_info "Reverted to snapshot '$snap'"
     
     if [[ "$start" == "true" ]]; then
         log_info "Starting VM..."
-        sudo virsh start "$vm"
+        $VIRSH start "$vm"
         log_info "VM started. Waiting for boot..."
         sleep 5
         
         # Try to get IP
         local ip
-        ip=$(sudo virsh domifaddr "$vm" 2>/dev/null | awk '/ipv4/ {print $4}' | cut -d/ -f1 | head -1)
+        ip=$($VIRSH domifaddr "$vm" 2>/dev/null | awk '/ipv4/ {print $4}' | cut -d/ -f1 | head -1)
         if [[ -n "$ip" ]]; then
             log_info "VM IP: $ip"
             log_info "SSH: ssh $(whoami)@$ip"
@@ -267,7 +279,7 @@ cmd_delete_snapshot() {
     fi
     
     log_cmd "snapshot-delete $vm $snap"
-    sudo virsh snapshot-delete "$vm" "$snap"
+    $VIRSH snapshot-delete "$vm" "$snap"
     
     log_info "Snapshot '$snap' deleted"
 }
@@ -297,7 +309,7 @@ cmd_post_run() {
     validate_vm_exists "$vm"
     
     # Check if dev-ready exists
-    if ! sudo virsh snapshot-info "$vm" "$SNAP_DEV_READY" &>/dev/null; then
+    if ! $VIRSH snapshot-info "$vm" "$SNAP_DEV_READY" &>/dev/null; then
         log_error "Golden snapshot '$SNAP_DEV_READY' not found"
         log_error "Create it first with: $(basename "$0") create $vm $SNAP_DEV_READY --offline"
         exit 1
@@ -332,7 +344,7 @@ cmd_golden() {
     log_info "VM state: $state"
     
     # os-clean snapshot
-    if sudo virsh snapshot-info "$vm" "$SNAP_OS_CLEAN" &>/dev/null; then
+    if $VIRSH snapshot-info "$vm" "$SNAP_OS_CLEAN" &>/dev/null; then
         log_warn "Snapshot '$SNAP_OS_CLEAN' already exists"
         echo -n "Skip os-clean? (y/n): "
         read -r response
@@ -365,12 +377,12 @@ cmd_golden() {
         echo -n "Shut down now? (y/n): "
         read -r response
         if [[ "$response" == "y" ]]; then
-            sudo virsh shutdown "$vm"
+            $VIRSH shutdown "$vm"
             sleep 10
         fi
     fi
     
-    if sudo virsh snapshot-info "$vm" "$SNAP_DEV_READY" &>/dev/null; then
+    if $VIRSH snapshot-info "$vm" "$SNAP_DEV_READY" &>/dev/null; then
         log_warn "Snapshot '$SNAP_DEV_READY' already exists"
         echo -n "Replace it? (y/n): "
         read -r response
