@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sync-ai-auth.sh` - Sync AI CLI auth and git config to VM
+- Pre-installed AI CLIs in golden image: Claude Code, Codex, Gemini
+- Pre-installed nexus-agents MCP server
+- SSH commit signing configured by default
+- Makefile target: `sync-auth`
+
+### Changed
+- Updated README with AI CLI sync documentation
+
 ## [1.1.0] - 2026-02-01
 
 ### Added

@@ -171,6 +171,51 @@ make clone-list      # List all clones
 make clone-cleanup   # Delete all clones
 ```
 
+## Syncing AI CLI Auth
+
+After creating a clone, sync your AI CLI credentials and git config from your host:
+
+```bash
+# Get clone IP
+./clone_manager.sh start moltdown-clone-xxx
+VM_IP=$(virsh domifaddr moltdown-clone-xxx | grep -oE '192\.168\.[0-9]+\.[0-9]+')
+
+# Sync all auth (Claude, Codex, Gemini, Git, SSH keys)
+./sync-ai-auth.sh $VM_IP agent
+# or
+make sync-auth VM_IP=$VM_IP
+
+# SSH in - CLIs are ready
+ssh agent@$VM_IP
+claude --version
+codex --version
+gemini --version
+```
+
+### What Gets Synced
+
+| Tool | Config Location | Contains |
+|------|-----------------|----------|
+| Claude Code | `~/.claude.json`, `~/.claude/` | Settings (auth via browser on first use) |
+| Codex | `~/.codex/` | OAuth tokens, config |
+| Gemini | `~/.gemini/` | OAuth tokens, settings |
+| Git | `~/.gitconfig` | Identity, signing config |
+| SSH | `~/.ssh/` | Keys for git auth + commit signing |
+| GPG | Exported/imported | Keys for commit signing (if used) |
+
+### First-Time Auth
+
+Some CLIs require browser-based authentication on first use:
+
+- **Claude Code**: Run `claude` and follow the browser prompt
+- **GitHub CLI**: Run `gh auth login` (token is in host keyring, not synced)
+
+### Security Note
+
+These files contain authentication tokens. They are copied directly to the VM
+(which is local to your machine) and are NOT committed to git. The VM disk
+images stay in `/var/lib/libvirt/images/` and are excluded by `.gitignore`.
+
 ## Long-Running Sessions
 
 VMs are hardened for multi-day or multi-week agent sessions:

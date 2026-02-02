@@ -1,7 +1,7 @@
 # moltdown 🦀 - Makefile
 # https://github.com/williamzujkowski/moltdown
 
-.PHONY: help lint seed-iso cloud-seed install-deps clean test setup-cloud setup gui start stop status clone clone-linked clone-list clone-cleanup
+.PHONY: help lint seed-iso cloud-seed install-deps clean test setup-cloud setup gui start stop status clone clone-linked clone-list clone-cleanup sync-auth
 
 SHELL := /bin/bash
 VM_NAME ?= ubuntu2404-agent
@@ -114,6 +114,13 @@ status: ## Show VM status and IP
 	@echo ""
 	@echo "=== VM IP ==="
 	@sudo virsh domifaddr $(VM_NAME) 2>/dev/null || echo "No IP (VM may not be running)"
+
+sync-auth: ## Sync AI CLI auth and git config to VM (requires VM_IP)
+	@if [ -z "$(VM_IP)" ]; then \
+		echo "Usage: make sync-auth VM_IP=192.168.122.x [VM_USER=agent]"; \
+		exit 1; \
+	fi
+	./sync-ai-auth.sh $(VM_IP) $(or $(VM_USER),agent)
 
 clean: ## Remove generated ISOs
 	rm -f seed.iso *.iso
