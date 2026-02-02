@@ -19,16 +19,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Golden image now includes full authentication (Claude OAuth, GitHub token, Codex, Gemini)
 - Clones inherit all authentication - no setup required
 - Health check on connect (`./agent.sh --health`)
+- **Agent resilience phase** in bootstrap with crash recovery tools:
+  - Claude memory watchdog systemd service (warns at 8GB, kills at 13GB)
+  - `run-claude-limited` cgroups wrapper for hard memory limits
+  - `agent-session` tmux wrapper with session persistence
+  - Enhanced `vm-health-check` with memory trend prediction and OOM alerts
+  - Crash event logging to `~/.agent-session/crashes.log`
+- `RESOURCES.md` - Comprehensive guide for parallel agent memory planning
+- Default RAM increased to 16GB (from 8GB) for Claude CLI memory leak protection
+- Default swap increased to 8GB (from 4GB)
+- `--memory` and `--vcpus` flags for `setup_cloud.sh`
 
 ### Changed
 - Updated README with one-command agent workflow
 - Updated README with quick reference table
 - Updated README with shell aliases
+- Updated README with agent resilience commands
+- Bootstrap now has 11 phases (added agent resilience phase)
 
 ### Fixed
 - CI shellcheck warnings (SC2155, SC2088)
 - Pinned GitHub Actions to stable versions (ludeeus/action-shellcheck@2.0.0, ibiqlik/action-yamllint@v3.1.1)
 - Updated golden image dependencies (npm 11.8.0, corepack 0.34.6, nexus-agents latest)
+- Removed `.mcp.json` from git tracking (local MCP config should not be shared)
 
 ## [1.1.0] - 2026-02-01
 

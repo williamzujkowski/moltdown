@@ -2,6 +2,7 @@
 *.iso
 *.qcow2
 *.img
+seed.iso
 
 # Logs
 *.log
@@ -24,6 +25,9 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/
+
+# MCP server config (local)
+.mcp.json
 
 # Secrets - never commit these
 secrets/
