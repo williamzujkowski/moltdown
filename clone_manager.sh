@@ -265,6 +265,16 @@ cmd_create() {
             --file "$clone_disk"
     fi
 
+    # Remove any inherited CD-ROM devices (they often reference deleted seed ISOs)
+    local cdrom_targets
+    cdrom_targets=$($VIRSH domblklist "$clone_name" --details 2>/dev/null | awk '/cdrom/{print $3}')
+    if [[ -n "$cdrom_targets" ]]; then
+        log_step "Removing inherited CD-ROM devices..."
+        for target in $cdrom_targets; do
+            $VIRSH detach-disk "$clone_name" "$target" --config 2>/dev/null || true
+        done
+    fi
+
     # Apply resource overrides if specified
     if [[ -n "$vcpus" ]]; then
         log_step "Setting vCPUs to $vcpus..."
