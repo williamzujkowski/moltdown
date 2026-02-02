@@ -16,7 +16,7 @@ readonly CLOUD_IMG_URL="https://cloud-images.ubuntu.com/noble/current/noble-serv
 readonly CLOUD_IMG_PATH="/var/lib/libvirt/images/ubuntu-noble-cloudimg.img"
 readonly DEFAULT_VM_NAME="ubuntu2404-agent"
 readonly DEFAULT_DISK_SIZE="50G"
-readonly DEFAULT_MEMORY="8192"
+readonly DEFAULT_MEMORY="16384"  # 16GB - needed for Claude CLI memory leaks
 readonly DEFAULT_VCPUS="4"
 
 log_info()  { echo -e "\033[32m[INFO]\033[0m  $*"; }
@@ -103,6 +103,8 @@ EOF
 
 create_vm() {
     local vm_name="$1"
+    local memory="$2"
+    local vcpus="$3"
     local disk_path="/var/lib/libvirt/images/${vm_name}.qcow2"
     local seed_path="/var/lib/libvirt/images/${vm_name}-seed.iso"
     
@@ -124,11 +126,11 @@ create_vm() {
     seed_path="/var/lib/libvirt/images/${vm_name}-seed.iso"
     
     # Create VM
-    log_info "Creating VM: $vm_name"
+    log_info "Creating VM: $vm_name (${memory}MB RAM, ${vcpus} vCPUs)"
     sudo virt-install \
         --name "$vm_name" \
-        --vcpus "$DEFAULT_VCPUS" \
-        --memory "$DEFAULT_MEMORY" \
+        --vcpus "$vcpus" \
+        --memory "$memory" \
         --disk "path=$disk_path" \
         --disk "path=$seed_path,device=cdrom" \
         --os-variant ubuntu24.04 \
@@ -177,14 +179,33 @@ wait_for_ready() {
 
 main() {
     local vm_name="$DEFAULT_VM_NAME"
+    local memory="$DEFAULT_MEMORY"
+    local vcpus="$DEFAULT_VCPUS"
     local skip_download=false
-    
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --vm-name) vm_name="$2"; shift 2 ;;
+            --memory) memory="$2"; shift 2 ;;
+            --vcpus) vcpus="$2"; shift 2 ;;
             --skip-download) skip_download=true; shift ;;
             -h|--help)
-                echo "Usage: $0 [--vm-name NAME] [--skip-download]"
+                cat << EOF
+Usage: $0 [options]
+
+Options:
+  --vm-name NAME     VM name (default: $DEFAULT_VM_NAME)
+  --memory MB        RAM in MB (default: $DEFAULT_MEMORY)
+  --vcpus N          Number of vCPUs (default: $DEFAULT_VCPUS)
+  --skip-download    Skip cloud image download if already present
+  -h, --help         Show this help
+
+Examples:
+  $0                                    # Default: 16GB RAM, 4 vCPUs
+  $0 --memory 8192 --vcpus 4            # Lightweight: 8GB RAM (multiple clones)
+  $0 --memory 24576 --vcpus 8           # Heavy: 24GB RAM, 8 vCPUs
+  $0 --vm-name my-agent --memory 12288  # Custom name with 12GB RAM
+EOF
                 exit 0
                 ;;
             *) shift ;;
@@ -203,7 +224,7 @@ main() {
         download_cloud_image
     fi
     
-    create_vm "$vm_name"
+    create_vm "$vm_name" "$memory" "$vcpus"
     wait_for_ready "$vm_name"
     
     echo ""

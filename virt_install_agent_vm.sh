@@ -22,7 +22,7 @@ readonly SCRIPT_VERSION="1.0.0"
 # VM defaults
 DEFAULT_VM_NAME="ubuntu2404-agent"
 DEFAULT_VCPUS="4"
-DEFAULT_MEMORY="8192"  # MB
+DEFAULT_MEMORY="16384"  # MB - 16GB needed for Claude CLI memory leaks
 DEFAULT_DISK_SIZE="50" # GB
 DEFAULT_DISK_PATH="/var/lib/libvirt/images"
 
