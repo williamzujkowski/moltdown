@@ -31,6 +31,15 @@ make install-deps             # Install host dependencies only
 ./snapshot_manager.sh post-run <vm>    # Revert to dev-ready
 ./snapshot_manager.sh golden <vm>      # Interactive golden image creation
 
+# Clone Management (Parallel Workflows)
+./clone_manager.sh create <vm> --linked  # Create linked clone (instant)
+./clone_manager.sh create <vm>           # Create full clone
+./clone_manager.sh list                  # List all clones
+./clone_manager.sh start <clone>         # Start a clone
+./clone_manager.sh stop <clone>          # Stop a clone
+./clone_manager.sh delete <clone>        # Delete a clone
+./clone_manager.sh cleanup <vm>          # Delete all clones of VM
+
 # Quality
 make lint                     # Run shellcheck + yamllint
 shellcheck -x *.sh guest/*.sh # Manual shellcheck

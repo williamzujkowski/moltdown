@@ -84,6 +84,7 @@ moltdown/
 ├── virt_install_agent_vm.sh     # Create VM with virt-install
 ├── run_bootstrap_on_vm.sh       # Push bootstrap via SSH
 ├── snapshot_manager.sh          # Manage VM snapshots
+├── clone_manager.sh             # Manage VM clones for parallel workflows
 ├── cloud-init/
 │   ├── user-data                # Cloud-init config (for cloud images)
 │   └── meta-data                # Cloud-init metadata
@@ -132,6 +133,42 @@ scp agent@<vm-ip>:~/work/artifacts/* ./local-artifacts/
 
 # Reset to clean state
 ./snapshot_manager.sh post-run ubuntu2404-agent
+```
+
+## Parallel Agent Workflows
+
+Run multiple agents simultaneously using VM clones:
+
+```bash
+# Create linked clones (instant, copy-on-write)
+./clone_manager.sh create ubuntu2404-agent --linked
+./clone_manager.sh create ubuntu2404-agent --linked
+./clone_manager.sh create ubuntu2404-agent --linked
+
+# Start clones
+./clone_manager.sh start moltdown-clone-ubuntu2404-agent-20250201-143052
+
+# List all clones
+./clone_manager.sh list
+
+# Connect to each clone
+virt-viewer <clone-name>  # GUI
+ssh agent@<clone-ip>      # SSH
+
+# Cleanup when done
+./clone_manager.sh cleanup ubuntu2404-agent
+```
+
+**Clone types:**
+- **Linked clone** (`--linked`): Instant creation, uses copy-on-write. Best for parallel work.
+- **Full clone**: Complete disk copy. Slower but fully independent.
+
+Using Make:
+```bash
+make clone-linked    # Create linked clone
+make clone           # Create full clone
+make clone-list      # List all clones
+make clone-cleanup   # Delete all clones
 ```
 
 ## Long-Running Sessions

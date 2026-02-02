@@ -1,7 +1,7 @@
 # moltdown 🦀 - Makefile
 # https://github.com/williamzujkowski/moltdown
 
-.PHONY: help lint seed-iso cloud-seed install-deps clean test setup-cloud setup gui start stop status
+.PHONY: help lint seed-iso cloud-seed install-deps clean test setup-cloud setup gui start stop status clone clone-linked clone-list clone-cleanup
 
 SHELL := /bin/bash
 VM_NAME ?= ubuntu2404-agent
@@ -72,6 +72,18 @@ post-run: ## Revert to dev-ready snapshot
 
 golden: ## Interactive golden image creation
 	./snapshot_manager.sh golden $(VM_NAME)
+
+clone: ## Create a full clone of VM
+	./clone_manager.sh create $(VM_NAME)
+
+clone-linked: ## Create a linked clone (fast, copy-on-write)
+	./clone_manager.sh create $(VM_NAME) --linked
+
+clone-list: ## List all clones
+	./clone_manager.sh list
+
+clone-cleanup: ## Delete all clones of VM
+	./clone_manager.sh cleanup $(VM_NAME)
 
 ssh: ## SSH into VM (requires VM_IP)
 	@if [ -z "$(VM_IP)" ]; then \
