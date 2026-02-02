@@ -7,14 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-### Changed
-### Deprecated
-### Removed
-### Fixed
-### Security
+## [1.1.0] - 2026-02-01
 
-## [1.0.0] - 2025-02-01
+### Added
+- `clone_manager.sh` for parallel agent workflows with linked clones
+- `setup_cloud.sh` - One-command setup using Ubuntu cloud images (fast!)
+- `generate_cloud_seed.sh` - Seed ISO generator for cloud images
+- GUI access support via virt-viewer and virt-manager
+- Long-running session hardening (swap file, cloud-init disable, journal limits)
+- `vm-health-check` script for monitoring VM health
+- SSH key authentication in golden image (clones inherit keys)
+- Security documentation clarifying local vs repo data
+- Makefile targets: `clone`, `clone-linked`, `clone-list`, `clone-cleanup`, `gui`, `start`, `stop`, `status`
+- `docs/CLOUD_IMAGES.md` for cloud image workflow documentation
+
+### Fixed
+- Sudo detection for libvirt group users (clone_manager.sh, snapshot_manager.sh)
+- Clone disk location now uses same directory as source
+- Inherited CD-ROM removal from clones (prevents missing ISO errors)
+
+### Changed
+- Cloud images now recommended over ISO installer (~8 min vs ~20 min setup)
+- Updated README with parallel workflows, GUI access, and security notes
+- Updated CLAUDE.md with clone commands and security considerations
+- Bootstrap phases now include long-run hardening (swap, journal limits)
+
+### Security
+- Added Security Notes section to README explaining what stays local
+- Added Security Considerations to CLAUDE.md for AI assistants
+- Documented that VM disk images, SSH keys, and credentials never enter git
+- `.gitignore` explicitly excludes all disk images and ISOs
+
+## [1.0.0] - 2026-02-01
 
 ### Added
 - Initial release of moltdown 🦀
@@ -33,5 +57,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - UFW firewall configuration
 - Unattended security upgrades
 
-[Unreleased]: https://github.com/williamzujkowski/moltdown/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/williamzujkowski/moltdown/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/williamzujkowski/moltdown/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/williamzujkowski/moltdown/releases/tag/v1.0.0
