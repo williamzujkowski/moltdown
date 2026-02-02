@@ -8,17 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `agent.sh` - One command to spin up and connect to agent VM
+- `update-golden.sh` - Update golden image CLIs and auth
+- `code-connect.sh` - Open VS Code Remote SSH to agent VM
 - `sync-ai-auth.sh` - Sync AI CLI auth and git config to VM
 - Pre-installed AI CLIs in golden image: Claude Code, Codex, Gemini
 - Pre-installed nexus-agents MCP server
 - SSH commit signing configured by default
-- Makefile target: `sync-auth`
+- Makefile targets: `agent`, `agent-list`, `agent-stop`, `agent-kill`, `update-golden`, `code-connect`, `sync-auth`
 - Golden image now includes full authentication (Claude OAuth, GitHub token, Codex, Gemini)
 - Clones inherit all authentication - no setup required
+- Health check on connect (`./agent.sh --health`)
 
 ### Changed
-- Updated README with authenticated golden image quick start
-- Updated README with AI CLI sync documentation
+- Updated README with one-command agent workflow
+- Updated README with quick reference table
+- Updated README with shell aliases
 
 ## [1.1.0] - 2026-02-01
 

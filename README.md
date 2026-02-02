@@ -22,18 +22,20 @@ This toolkit provides:
 If you already have a golden image with authentication baked in:
 
 ```bash
-# Create and start a clone
-./clone_manager.sh create moltdown-integration-test --linked
-./clone_manager.sh start moltdown-clone-xxx
+# One command to spin up an agent VM and connect
+./agent.sh
 
-# Get the IP
-virsh domifaddr moltdown-clone-xxx
-
-# SSH in - all CLIs work immediately!
-ssh agent@<ip>
+# That's it! You're now in a shell with all CLIs ready:
 claude "explain this codebase"
 codex "fix the tests"
 gh pr create
+```
+
+Or using make:
+```bash
+make agent           # Spin up and connect
+make agent-list      # List running clones
+make agent-kill CLONE=moltdown-clone-xxx  # Clean up
 ```
 
 No authentication needed - everything is inherited from the golden image.
@@ -568,6 +570,39 @@ When you add your SSH public key to the golden image:
 ### Cloud-Init Credentials
 
 The `cloud-init/user-data` template in this repo contains **example** credentials. When you run `generate_cloud_seed.sh`, you provide your own credentials which are written to a local `seed.iso` that is **not** committed to git.
+
+## Quick Reference
+
+### Agent Workflow Commands
+
+| Command | Description |
+|---------|-------------|
+| `./agent.sh` | Create new agent VM and connect (one command!) |
+| `./agent.sh --list` | List all agent clones |
+| `./agent.sh --attach <name>` | Attach to existing clone |
+| `./agent.sh --stop <name>` | Stop a clone gracefully |
+| `./agent.sh --kill <name>` | Delete a clone completely |
+| `./agent.sh --gui <name>` | Open GUI viewer for clone |
+| `./agent.sh --health <name>` | Run health check on clone |
+
+### Maintenance Commands
+
+| Command | Description |
+|---------|-------------|
+| `./update-golden.sh` | Full update (packages + CLIs + auth) |
+| `./update-golden.sh --quick` | Quick update (CLIs only) |
+| `./update-golden.sh --auth-only` | Re-sync auth from host |
+| `./code-connect.sh` | Open VS Code connected to agent VM |
+| `./sync-ai-auth.sh <ip>` | Sync auth to specific VM |
+
+### Shell Aliases (add to ~/.bashrc)
+
+```bash
+alias ma='~/git/moltdown/agent.sh'           # New agent
+alias mal='~/git/moltdown/agent.sh --list'   # List agents
+alias mak='~/git/moltdown/agent.sh --kill'   # Kill agent
+alias mac='~/git/moltdown/code-connect.sh'   # VS Code connect
+```
 
 ## License
 

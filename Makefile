@@ -1,7 +1,7 @@
 # moltdown 🦀 - Makefile
 # https://github.com/williamzujkowski/moltdown
 
-.PHONY: help lint seed-iso cloud-seed install-deps clean test setup-cloud setup gui start stop status clone clone-linked clone-list clone-cleanup sync-auth
+.PHONY: help lint seed-iso cloud-seed install-deps clean test setup-cloud setup gui start stop status clone clone-linked clone-list clone-cleanup sync-auth agent agent-list agent-stop agent-kill update-golden code-connect
 
 SHELL := /bin/bash
 VM_NAME ?= ubuntu2404-agent
@@ -121,6 +121,42 @@ sync-auth: ## Sync AI CLI auth and git config to VM (requires VM_IP)
 		exit 1; \
 	fi
 	./sync-ai-auth.sh $(VM_IP) $(or $(VM_USER),agent)
+
+# Agent workflow commands
+agent: ## Spin up a new agent VM and connect (one command!)
+	./agent.sh
+
+agent-list: ## List all agent clones
+	./agent.sh --list
+
+agent-attach: ## Attach to existing agent clone (use CLONE=name)
+	./agent.sh --attach $(CLONE)
+
+agent-stop: ## Stop an agent clone (use CLONE=name)
+	@if [ -z "$(CLONE)" ]; then \
+		echo "Usage: make agent-stop CLONE=moltdown-clone-xxx"; \
+		exit 1; \
+	fi
+	./agent.sh --stop $(CLONE)
+
+agent-kill: ## Delete an agent clone (use CLONE=name)
+	@if [ -z "$(CLONE)" ]; then \
+		echo "Usage: make agent-kill CLONE=moltdown-clone-xxx"; \
+		exit 1; \
+	fi
+	./agent.sh --kill $(CLONE)
+
+agent-health: ## Health check on agent clone (use CLONE=name or most recent)
+	./agent.sh --health $(CLONE)
+
+update-golden: ## Update golden image (CLIs, packages, auth)
+	./update-golden.sh
+
+update-golden-quick: ## Quick update golden image (CLIs only)
+	./update-golden.sh --quick
+
+code-connect: ## Open VS Code connected to agent VM
+	./code-connect.sh
 
 clean: ## Remove generated ISOs
 	rm -f seed.iso *.iso
