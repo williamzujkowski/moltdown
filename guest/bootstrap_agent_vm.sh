@@ -44,6 +44,10 @@ INSTALL_CLAUDE_CLI="true"
 REMOVE_DESKTOP_FLUFF="true"
 ENABLE_UNATTENDED_UPGRADES="true"
 
+# Resource settings (can be overridden in bootstrap_local.sh)
+# 8GB swap recommended for Claude CLI memory leak protection
+SWAP_SIZE="${SWAP_SIZE:-8G}"
+
 # Source local customizations if present
 readonly LOCAL_CONFIG="$HOME/bootstrap_local.sh"
 if [[ -f "$LOCAL_CONFIG" ]]; then
@@ -405,14 +409,15 @@ phase_longrun_hardening() {
     sudo touch /etc/cloud/cloud-init.disabled
 
     # Create swap file if not present (important for memory pressure during long runs)
+    # Claude CLI memory leaks can consume 13GB+, so larger swap is recommended
     if [[ ! -f /swapfile ]]; then
-        log_info "Creating 4GB swap file..."
-        sudo fallocate -l 4G /swapfile
+        log_info "Creating ${SWAP_SIZE} swap file (Claude CLI memory leak protection)..."
+        sudo fallocate -l "$SWAP_SIZE" /swapfile
         sudo chmod 600 /swapfile
         sudo mkswap /swapfile
         sudo swapon /swapfile
         echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-        log_info "Swap file created and enabled"
+        log_info "Swap file created and enabled (${SWAP_SIZE})"
     else
         log_info "Swap file already exists"
     fi
@@ -423,14 +428,54 @@ phase_longrun_hardening() {
 #!/bin/bash
 # vm-health-check - Quick VM health status for long-running sessions
 # Part of moltdown 🦀
-echo "=== VM Health Check $(date '+%Y-%m-%d %H:%M:%S') ==="
-echo "Uptime:  $(uptime -p)"
-echo "Memory:  $(free -h | awk '/Mem:/{print $3 "/" $2 " (" int($3/$2*100) "% used)"}')"
-echo "Swap:    $(free -h | awk '/Swap:/{if($2!="0B") print $3 "/" $2; else print "not configured"}')"
-echo "Disk:    $(df -h / | awk 'NR==2{print $3 "/" $2 " (" $5 " used)"}')"
-echo "Load:    $(cat /proc/loadavg | cut -d' ' -f1-3)"
-echo "Procs:   $(ps aux --no-headers | wc -l)"
-echo "Journal: $(journalctl --disk-usage 2>/dev/null | grep -oP '\d+\.\d+[MG]' || echo 'unknown')"
+
+show_help() {
+    echo "Usage: vm-health-check [--watch]"
+    echo "  --watch  Continuous monitoring (updates every 30s)"
+    exit 0
+}
+
+check_health() {
+    echo "=== VM Health Check $(date '+%Y-%m-%d %H:%M:%S') ==="
+    echo "Uptime:  $(uptime -p)"
+    echo ""
+    echo "--- Memory ---"
+    echo "RAM:     $(free -h | awk '/Mem:/{print $3 "/" $2 " (" int($3/$2*100) "% used)"}')"
+    echo "Swap:    $(free -h | awk '/Swap:/{if($2!="0B") print $3 "/" $2 " (" int($3/$2*100) "%)"; else print "not configured"}')"
+
+    # Claude CLI memory tracking (critical for leak detection)
+    local claude_mem
+    claude_mem=$(ps aux 2>/dev/null | grep -E 'claude|node.*claude-code' | grep -v grep | awk '{sum+=$6} END {if(sum>0) printf "%.1fMB", sum/1024; else print "not running"}')
+    echo "Claude:  $claude_mem"
+
+    # Warn if Claude is consuming excessive memory
+    local claude_mb
+    claude_mb=$(ps aux 2>/dev/null | grep -E 'claude|node.*claude-code' | grep -v grep | awk '{sum+=$6} END {print sum/1024}')
+    if [[ -n "$claude_mb" ]] && (( $(echo "$claude_mb > 4000" | bc -l 2>/dev/null || echo 0) )); then
+        echo "  ⚠️  WARNING: Claude CLI using >4GB - consider restarting or snapshotting"
+    fi
+
+    echo ""
+    echo "--- System ---"
+    echo "Disk:    $(df -h / | awk 'NR==2{print $3 "/" $2 " (" $5 " used)"}')"
+    echo "Load:    $(cat /proc/loadavg | cut -d' ' -f1-3)"
+    echo "Procs:   $(ps aux --no-headers | wc -l)"
+    echo "Journal: $(journalctl --disk-usage 2>/dev/null | grep -oP '\d+\.\d+[MG]' || echo 'unknown')"
+}
+
+case "${1:-}" in
+    --help|-h) show_help ;;
+    --watch|-w)
+        while true; do
+            clear
+            check_health
+            echo ""
+            echo "[Ctrl+C to exit, refreshing in 30s...]"
+            sleep 30
+        done
+        ;;
+    *) check_health ;;
+esac
 HEALTHEOF
     sudo chmod +x /usr/local/bin/vm-health-check
 

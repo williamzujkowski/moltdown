@@ -10,8 +10,10 @@
 
 ```bash
 # Setup & Installation (Cloud Image - Recommended)
-./setup_cloud.sh              # One-command setup using cloud images (fast!)
-./setup_cloud.sh --vm-name my-agent  # Custom VM name
+./setup_cloud.sh                          # Default: 16GB RAM, 4 vCPUs
+./setup_cloud.sh --memory 8192 --vcpus 4  # Lightweight (for multiple clones)
+./setup_cloud.sh --memory 24576 --vcpus 8 # Heavy workload
+./setup_cloud.sh --vm-name my-agent       # Custom VM name
 
 # Setup & Installation (ISO - Alternative)
 ./setup.sh                    # One-command setup using ISO installer (slower)
@@ -32,13 +34,18 @@ make install-deps             # Install host dependencies only
 ./snapshot_manager.sh golden <vm>      # Interactive golden image creation
 
 # Clone Management (Parallel Workflows)
-./clone_manager.sh create <vm> --linked  # Create linked clone (instant)
-./clone_manager.sh create <vm>           # Create full clone
-./clone_manager.sh list                  # List all clones
-./clone_manager.sh start <clone>         # Start a clone
-./clone_manager.sh stop <clone>          # Stop a clone
-./clone_manager.sh delete <clone>        # Delete a clone
-./clone_manager.sh cleanup <vm>          # Delete all clones of VM
+./clone_manager.sh create <vm> --linked               # Linked clone (instant)
+./clone_manager.sh create <vm> --linked --memory 8192 # Linked clone with 8GB
+./clone_manager.sh create <vm> --linked --vcpus 2     # Linked clone with 2 vCPUs
+./clone_manager.sh list                               # List all clones
+./clone_manager.sh start <clone>                      # Start a clone
+./clone_manager.sh stop <clone>                       # Stop a clone
+./clone_manager.sh delete <clone>                     # Delete a clone
+./clone_manager.sh cleanup <vm>                       # Delete all clones of VM
+
+# Resource Planning (see RESOURCES.md for details)
+# 64GB host: 2-4 clones @ 12-16GB each
+# Claude CLI can leak to 13GB+, plan accordingly
 
 # Quality
 make lint                     # Run shellcheck + yamllint
@@ -496,4 +503,4 @@ When working with this codebase, ensure:
 
 ---
 
-_Last updated: 2026-02-01 (ET)_
+_Last updated: 2026-02-02 (ET)_
