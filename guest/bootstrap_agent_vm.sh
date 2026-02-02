@@ -16,8 +16,9 @@
 #          5) Browser & automation
 #          6) Agent tooling
 #          7) Desktop optimization
-#          8) Long-run session hardening
-#          9) Verification
+#          8) Agent resilience (watchdog, cgroups, session persistence)
+#          9) Long-run session hardening
+#         10) Verification
 #
 # License: MIT
 #===============================================================================
@@ -399,7 +400,256 @@ phase_desktop_optimization() {
 }
 
 #-------------------------------------------------------------------------------
-# Phase 8: Long-Run Session Hardening
+# Phase 8: Agent Process Resilience & Recovery
+#-------------------------------------------------------------------------------
+phase_agent_resilience() {
+    log_phase "Agent Process Resilience & Recovery"
+
+    # Feature flags (can be overridden in bootstrap_local.sh)
+    ENABLE_WATCHDOG="${ENABLE_WATCHDOG:-true}"
+    ENABLE_CGROUPS_LIMITS="${ENABLE_CGROUPS_LIMITS:-true}"
+    ENABLE_SESSION_PERSISTENCE="${ENABLE_SESSION_PERSISTENCE:-true}"
+
+    # Memory limits (configurable)
+    WATCHDOG_WARN_MB="${WATCHDOG_WARN_MB:-8000}"
+    WATCHDOG_KILL_MB="${WATCHDOG_KILL_MB:-13000}"
+    CGROUPS_MEMORY_LIMIT="${CGROUPS_MEMORY_LIMIT:-12G}"
+
+    #---------------------------------------------------------------------------
+    # 1. Claude Memory Watchdog Service
+    #---------------------------------------------------------------------------
+    if [[ "$ENABLE_WATCHDOG" == "true" ]]; then
+        log_info "Installing Claude memory watchdog service..."
+
+        # Watchdog script
+        sudo tee /usr/local/bin/claude-memory-watchdog > /dev/null <<'WATCHDOGEOF'
+#!/usr/bin/env bash
+#===============================================================================
+# claude-memory-watchdog - Monitor and manage Claude CLI memory usage
+#===============================================================================
+# Part of moltdown 🦀 - https://github.com/williamzujkowski/moltdown
+set -euo pipefail
+
+readonly WARN_THRESHOLD_MB="${WATCHDOG_WARN_MB:-8000}"
+readonly KILL_THRESHOLD_MB="${WATCHDOG_KILL_MB:-13000}"
+readonly CHECK_INTERVAL=30
+readonly LOG_TAG="claude-watchdog"
+
+log() { logger -t "$LOG_TAG" "$*"; echo "[$(date '+%H:%M:%S')] $*"; }
+
+get_claude_memory_mb() {
+    ps aux 2>/dev/null | grep -E 'node.*claude|claude.*node|bun.*claude' | grep -v grep \
+        | awk '{sum+=$6} END {if(sum>0) printf "%.0f", sum/1024; else print "0"}'
+}
+
+main() {
+    log "Starting watchdog (warn: ${WARN_THRESHOLD_MB}MB, kill: ${KILL_THRESHOLD_MB}MB)"
+
+    while true; do
+        local mem_mb
+        mem_mb=$(get_claude_memory_mb)
+
+        if [[ "$mem_mb" -gt "$KILL_THRESHOLD_MB" ]]; then
+            log "CRITICAL: Claude using ${mem_mb}MB (>${KILL_THRESHOLD_MB}MB), sending SIGTERM..."
+            pkill -TERM -f 'node.*claude|claude.*node|bun.*claude' 2>/dev/null || true
+            sleep 5
+
+            # Force kill if still running
+            mem_mb=$(get_claude_memory_mb)
+            if [[ "$mem_mb" -gt "$KILL_THRESHOLD_MB" ]]; then
+                log "CRITICAL: Force killing Claude (still at ${mem_mb}MB)..."
+                pkill -KILL -f 'node.*claude|claude.*node|bun.*claude' 2>/dev/null || true
+            fi
+        elif [[ "$mem_mb" -gt "$WARN_THRESHOLD_MB" ]]; then
+            log "WARNING: Claude using ${mem_mb}MB (>${WARN_THRESHOLD_MB}MB)"
+        fi
+
+        sleep "$CHECK_INTERVAL"
+    done
+}
+
+main "$@"
+WATCHDOGEOF
+        sudo chmod +x /usr/local/bin/claude-memory-watchdog
+
+        # Systemd service
+        sudo tee /etc/systemd/system/claude-watchdog.service > /dev/null <<EOF
+[Unit]
+Description=Claude CLI Memory Watchdog
+Documentation=https://github.com/williamzujkowski/moltdown
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/claude-memory-watchdog
+Restart=on-failure
+RestartSec=30s
+Environment="WATCHDOG_WARN_MB=${WATCHDOG_WARN_MB}"
+Environment="WATCHDOG_KILL_MB=${WATCHDOG_KILL_MB}"
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=claude-watchdog
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        sudo systemctl daemon-reload
+        sudo systemctl enable claude-watchdog
+        log_info "Claude watchdog service installed (warn: ${WATCHDOG_WARN_MB}MB, kill: ${WATCHDOG_KILL_MB}MB)"
+    fi
+
+    #---------------------------------------------------------------------------
+    # 2. cgroups v2 Memory Limiting Wrapper
+    #---------------------------------------------------------------------------
+    if [[ "$ENABLE_CGROUPS_LIMITS" == "true" ]]; then
+        log_info "Installing cgroups memory limit wrapper..."
+
+        sudo tee /usr/local/bin/run-claude-limited > /dev/null <<'CGROUPSEOF'
+#!/usr/bin/env bash
+#===============================================================================
+# run-claude-limited - Run Claude CLI with enforced memory limits
+#===============================================================================
+# Part of moltdown 🦀 - https://github.com/williamzujkowski/moltdown
+#
+# Usage: run-claude-limited [MEMORY_LIMIT] [claude args...]
+#        run-claude-limited 12G           # Run with 12GB limit
+#        run-claude-limited 8G --help     # Run with 8GB limit
+#===============================================================================
+set -euo pipefail
+
+MEMORY_LIMIT="${1:-12G}"
+shift 2>/dev/null || true
+
+# Validate limit format
+if [[ ! "$MEMORY_LIMIT" =~ ^[0-9]+[GMK]$ ]]; then
+    echo "Usage: run-claude-limited [MEMORY_LIMIT] [claude args...]"
+    echo "  MEMORY_LIMIT: Memory limit with suffix (e.g., 12G, 8192M)"
+    echo "  Default: 12G"
+    exit 1
+fi
+
+# Calculate swap limit (memory + 4G for emergency)
+MEM_VALUE="${MEMORY_LIMIT%[GMK]}"
+MEM_SUFFIX="${MEMORY_LIMIT: -1}"
+SWAP_VALUE=$((MEM_VALUE + 4))
+SWAP_LIMIT="${SWAP_VALUE}${MEM_SUFFIX}"
+
+echo "[run-claude-limited] Starting with MemoryMax=${MEMORY_LIMIT}, MemorySwapMax=${SWAP_LIMIT}"
+
+exec systemd-run \
+    --user \
+    --scope \
+    --unit="claude-limited-$$" \
+    -p "MemoryMax=${MEMORY_LIMIT}" \
+    -p "MemorySwapMax=${SWAP_LIMIT}" \
+    -p "MemoryAccounting=yes" \
+    -- claude "$@"
+CGROUPSEOF
+        sudo chmod +x /usr/local/bin/run-claude-limited
+        log_info "cgroups wrapper installed (default limit: ${CGROUPS_MEMORY_LIMIT})"
+    fi
+
+    #---------------------------------------------------------------------------
+    # 3. Session Persistence with tmux
+    #---------------------------------------------------------------------------
+    if [[ "$ENABLE_SESSION_PERSISTENCE" == "true" ]]; then
+        log_info "Installing session persistence tools..."
+
+        # Agent session wrapper
+        mkdir -p "$HOME/.local/bin"
+        mkdir -p "$HOME/.agent-session"
+
+        cat > "$HOME/.local/bin/agent-session" <<'SESSIONEOF'
+#!/usr/bin/env bash
+#===============================================================================
+# agent-session - tmux session management with persistence
+#===============================================================================
+# Part of moltdown 🦀 - https://github.com/williamzujkowski/moltdown
+#
+# Usage: agent-session [session-name] [work-dir]
+#===============================================================================
+set -euo pipefail
+
+SESSION_NAME="${1:-agent-work}"
+WORK_DIR="${2:-$HOME/work}"
+SESSION_DIR="$HOME/.agent-session"
+RECOVERY_FILE="$SESSION_DIR/${SESSION_NAME}.state"
+
+mkdir -p "$SESSION_DIR"
+
+if tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
+    echo "Attaching to existing session: $SESSION_NAME"
+    tmux attach-session -t "$SESSION_NAME"
+else
+    echo "Creating new session: $SESSION_NAME in $WORK_DIR"
+
+    tmux new-session -d -s "$SESSION_NAME" -c "$WORK_DIR"
+
+    # Log session state for recovery
+    cat > "$RECOVERY_FILE" <<EOF
+session=$SESSION_NAME
+created=$(date -Is)
+work_dir=$WORK_DIR
+pid=$$
+EOF
+
+    tmux attach-session -t "$SESSION_NAME"
+fi
+SESSIONEOF
+        chmod +x "$HOME/.local/bin/agent-session"
+
+        # Crash monitor
+        cat > "$HOME/.local/bin/agent-crash-monitor" <<'CRASHEOF'
+#!/usr/bin/env bash
+#===============================================================================
+# agent-crash-monitor - Log crash events for post-mortem analysis
+#===============================================================================
+# Part of moltdown 🦀 - https://github.com/williamzujkowski/moltdown
+set -euo pipefail
+
+SESSION_DIR="$HOME/.agent-session"
+CRASH_LOG="$SESSION_DIR/crashes.log"
+mkdir -p "$SESSION_DIR"
+
+log_crash() {
+    local timestamp
+    timestamp=$(date -Is)
+    local mem_info
+    mem_info=$(free -h | grep -E '^Mem:|^Swap:' | tr '\n' ' ')
+
+    cat >> "$CRASH_LOG" <<EOF
+---
+timestamp: $timestamp
+trigger: $1
+memory: $mem_info
+claude_processes: $(pgrep -c -f 'claude|node.*claude' 2>/dev/null || echo 0)
+sessions: $(tmux list-sessions 2>/dev/null | wc -l || echo 0)
+EOF
+}
+
+# Monitor dmesg for OOM events
+while true; do
+    if dmesg -T 2>/dev/null | tail -20 | grep -qi 'out of memory\|oom-killer\|killed process.*claude'; then
+        log_crash "oom-killer"
+    fi
+    sleep 60
+done
+CRASHEOF
+        chmod +x "$HOME/.local/bin/agent-crash-monitor"
+
+        # Add to PATH if not present
+        if ! grep -q '.local/bin' "$HOME/.bashrc" 2>/dev/null; then
+            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc"
+        fi
+
+        log_info "Session persistence tools installed (agent-session, agent-crash-monitor)"
+    fi
+
+    log_info "Agent resilience phase complete"
+}
+
+#-------------------------------------------------------------------------------
+# Phase 9: Long-Run Session Hardening
 #-------------------------------------------------------------------------------
 phase_longrun_hardening() {
     log_phase "Long-Run Session Hardening"
@@ -422,17 +672,94 @@ phase_longrun_hardening() {
         log_info "Swap file already exists"
     fi
 
-    # Install health check script for monitoring long sessions
-    log_info "Installing health check script..."
+    # Install enhanced health check script with trend analysis
+    log_info "Installing enhanced health check script..."
     sudo tee /usr/local/bin/vm-health-check > /dev/null <<'HEALTHEOF'
 #!/bin/bash
-# vm-health-check - Quick VM health status for long-running sessions
-# Part of moltdown 🦀
+#===============================================================================
+# vm-health-check - VM health status with memory trend prediction
+#===============================================================================
+# Part of moltdown 🦀 - https://github.com/williamzujkowski/moltdown
+set -uo pipefail
+
+readonly METRICS_DIR="$HOME/.vm-metrics"
+readonly METRICS_FILE="$METRICS_DIR/memory-trend.csv"
+readonly WARN_THRESHOLD=8000
+readonly ALERT_THRESHOLD=12000
+
+mkdir -p "$METRICS_DIR" 2>/dev/null || true
 
 show_help() {
-    echo "Usage: vm-health-check [--watch]"
-    echo "  --watch  Continuous monitoring (updates every 30s)"
+    echo "Usage: vm-health-check [options]"
+    echo ""
+    echo "Options:"
+    echo "  --watch, -w    Continuous monitoring (updates every 30s)"
+    echo "  --trend, -t    Show memory trend analysis"
+    echo "  --help, -h     Show this help"
     exit 0
+}
+
+get_claude_memory_mb() {
+    ps aux 2>/dev/null | grep -E 'node.*claude|claude.*node|bun.*claude' | grep -v grep \
+        | awk '{sum+=$6} END {if(sum>0) printf "%.0f", sum/1024; else print "0"}'
+}
+
+record_metric() {
+    local timestamp mem_mb
+    timestamp=$(date +%s)
+    mem_mb=$(get_claude_memory_mb)
+
+    echo "$timestamp,$mem_mb" >> "$METRICS_FILE" 2>/dev/null || true
+
+    # Keep only last 24 hours (2880 samples at 30s intervals)
+    if [[ -f "$METRICS_FILE" ]]; then
+        tail -n 2880 "$METRICS_FILE" > "$METRICS_FILE.tmp" 2>/dev/null && \
+            mv "$METRICS_FILE.tmp" "$METRICS_FILE" 2>/dev/null || true
+    fi
+
+    echo "$mem_mb"
+}
+
+predict_trend() {
+    if [[ ! -f "$METRICS_FILE" ]]; then
+        echo "insufficient_data"
+        return
+    fi
+
+    local line_count
+    line_count=$(wc -l < "$METRICS_FILE" 2>/dev/null || echo "0")
+
+    if [[ "$line_count" -lt 10 ]]; then
+        echo "insufficient_data"
+        return
+    fi
+
+    # Get last 30 minutes of data (60 samples)
+    local start_mem end_mem
+    start_mem=$(tail -n 60 "$METRICS_FILE" | head -1 | cut -d, -f2 2>/dev/null || echo "0")
+    end_mem=$(tail -n 1 "$METRICS_FILE" | cut -d, -f2 2>/dev/null || echo "0")
+
+    local delta=$((end_mem - start_mem))
+
+    # If growing by >2GB in 30 min, predict OOM
+    if [[ "$delta" -gt 2000 ]]; then
+        local rate_per_min=$((delta / 30))
+        local remaining=$((ALERT_THRESHOLD - end_mem))
+        local mins_to_alert=$((remaining / rate_per_min))
+
+        if [[ "$mins_to_alert" -gt 0 && "$mins_to_alert" -lt 120 ]]; then
+            echo "oom_predicted:${mins_to_alert}"
+            return
+        fi
+    fi
+
+    if [[ "$delta" -gt 500 ]]; then
+        echo "growing"
+    elif [[ "$delta" -lt -500 ]]; then
+        echo "shrinking"
+    else
+        echo "stable"
+    fi
 }
 
 check_health() {
@@ -443,16 +770,39 @@ check_health() {
     echo "RAM:     $(free -h | awk '/Mem:/{print $3 "/" $2 " (" int($3/$2*100) "% used)"}')"
     echo "Swap:    $(free -h | awk '/Swap:/{if($2!="0B") print $3 "/" $2 " (" int($3/$2*100) "%)"; else print "not configured"}')"
 
-    # Claude CLI memory tracking (critical for leak detection)
-    local claude_mem
-    claude_mem=$(ps aux 2>/dev/null | grep -E 'claude|node.*claude-code' | grep -v grep | awk '{sum+=$6} END {if(sum>0) printf "%.1fMB", sum/1024; else print "not running"}')
-    echo "Claude:  $claude_mem"
-
-    # Warn if Claude is consuming excessive memory
+    # Claude CLI memory tracking with trend
     local claude_mb
-    claude_mb=$(ps aux 2>/dev/null | grep -E 'claude|node.*claude-code' | grep -v grep | awk '{sum+=$6} END {print sum/1024}')
-    if [[ -n "$claude_mb" ]] && (( $(echo "$claude_mb > 4000" | bc -l 2>/dev/null || echo 0) )); then
-        echo "  ⚠️  WARNING: Claude CLI using >4GB - consider restarting or snapshotting"
+    claude_mb=$(record_metric)
+    echo "Claude:  ${claude_mb}MB"
+
+    # Trend prediction
+    local trend
+    trend=$(predict_trend)
+    case "$trend" in
+        oom_predicted:*)
+            local mins="${trend#*:}"
+            echo "  🔴 ALERT: Predicted memory exhaustion in ~${mins} minutes!"
+            ;;
+        growing)
+            echo "  🟡 CAUTION: Memory usage increasing"
+            ;;
+        stable|shrinking)
+            # No warning needed
+            ;;
+    esac
+
+    # Threshold warnings
+    if [[ "$claude_mb" -gt "$ALERT_THRESHOLD" ]]; then
+        echo "  🔴 CRITICAL: Claude using >${ALERT_THRESHOLD}MB - watchdog may terminate"
+    elif [[ "$claude_mb" -gt "$WARN_THRESHOLD" ]]; then
+        echo "  🟡 WARNING: Claude using >${WARN_THRESHOLD}MB - consider restarting"
+    fi
+
+    # Watchdog status
+    if systemctl is-active --quiet claude-watchdog 2>/dev/null; then
+        echo "Watchdog: running"
+    else
+        echo "Watchdog: not running"
     fi
 
     echo ""
@@ -463,8 +813,44 @@ check_health() {
     echo "Journal: $(journalctl --disk-usage 2>/dev/null | grep -oP '\d+\.\d+[MG]' || echo 'unknown')"
 }
 
+show_trend() {
+    echo "=== Memory Trend Analysis ==="
+    if [[ ! -f "$METRICS_FILE" ]]; then
+        echo "No trend data available. Run vm-health-check --watch to collect data."
+        return
+    fi
+
+    local count
+    count=$(wc -l < "$METRICS_FILE")
+    echo "Data points: $count"
+
+    if [[ "$count" -lt 2 ]]; then
+        echo "Not enough data for trend analysis."
+        return
+    fi
+
+    # Last 5 readings
+    echo ""
+    echo "Recent readings (last 5):"
+    tail -n 5 "$METRICS_FILE" | while IFS=, read -r ts mem; do
+        echo "  $(date -d "@$ts" '+%H:%M:%S'): ${mem}MB"
+    done
+
+    # Min/max in dataset
+    echo ""
+    local min max
+    min=$(cut -d, -f2 "$METRICS_FILE" | sort -n | head -1)
+    max=$(cut -d, -f2 "$METRICS_FILE" | sort -n | tail -1)
+    echo "Range: ${min}MB - ${max}MB"
+
+    # Current trend
+    echo ""
+    echo "Trend: $(predict_trend)"
+}
+
 case "${1:-}" in
     --help|-h) show_help ;;
+    --trend|-t) show_trend ;;
     --watch|-w)
         while true; do
             clear
@@ -594,14 +980,15 @@ main() {
     run_once "05-browser-automation"   phase_browser_automation
     run_once "06-agent-tooling"        phase_agent_tooling
     run_once "07-desktop-optimization" phase_desktop_optimization
-    run_once "08-longrun-hardening"    phase_longrun_hardening
+    run_once "08-agent-resilience"     phase_agent_resilience
+    run_once "09-longrun-hardening"    phase_longrun_hardening
 
     # Run local customizations if defined (from bootstrap_local.sh)
     if declare -f phase_local_customizations &>/dev/null; then
-        run_once "09-local-customizations" phase_local_customizations
+        run_once "10-local-customizations" phase_local_customizations
     fi
 
-    run_once "10-verification"         phase_verification
+    run_once "11-verification"         phase_verification
     
     echo ""
     echo "╔═══════════════════════════════════════════════════════════════════╗"

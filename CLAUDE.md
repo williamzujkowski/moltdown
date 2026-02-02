@@ -47,6 +47,15 @@ make install-deps             # Install host dependencies only
 # 64GB host: 2-4 clones @ 12-16GB each
 # Claude CLI can leak to 13GB+, plan accordingly
 
+# Agent Resilience (inside VM)
+vm-health-check              # Quick health check with Claude memory
+vm-health-check --watch      # Continuous monitoring (30s refresh)
+vm-health-check --trend      # Memory trend analysis
+run-claude-limited           # Run Claude with 12GB memory limit
+run-claude-limited 8G        # Run Claude with 8GB memory limit
+agent-session                # Start/attach to persistent tmux session
+systemctl status claude-watchdog  # Check watchdog service
+
 # Quality
 make lint                     # Run shellcheck + yamllint
 shellcheck -x *.sh guest/*.sh # Manual shellcheck

@@ -129,6 +129,80 @@ done
 
 ---
 
+## Agent Resilience Features
+
+The bootstrap installs automated resilience tools to prevent and recover from AI CLI crashes.
+
+### Claude Memory Watchdog (Automatic)
+
+A systemd service that monitors Claude CLI memory and terminates runaway processes:
+
+```bash
+# Check watchdog status
+systemctl status claude-watchdog
+
+# View watchdog logs
+journalctl -u claude-watchdog -f
+
+# Manually start/stop
+sudo systemctl start claude-watchdog
+sudo systemctl stop claude-watchdog
+```
+
+**Thresholds** (configurable in `bootstrap_local.sh`):
+- `WATCHDOG_WARN_MB=8000` - Log warning at 8GB
+- `WATCHDOG_KILL_MB=13000` - Kill Claude at 13GB
+
+### cgroups Memory Limiting
+
+Run Claude with hard memory limits using the `run-claude-limited` wrapper:
+
+```bash
+# Run with default 12GB limit
+run-claude-limited
+
+# Run with custom 8GB limit
+run-claude-limited 8G
+
+# Run with limit and arguments
+run-claude-limited 10G --help
+```
+
+The wrapper uses systemd cgroups v2 to enforce hard limits. OOM killer will target Claude if the limit is exceeded.
+
+### Session Persistence
+
+Use `agent-session` for tmux-based session persistence:
+
+```bash
+# Start or attach to default session
+agent-session
+
+# Start named session in specific directory
+agent-session my-project ~/work/repos/my-project
+```
+
+Sessions survive disconnects and can be reattached on reconnect. Crash events are logged to `~/.agent-session/crashes.log`.
+
+### Enhanced Health Check
+
+The `vm-health-check` command now includes memory trend prediction:
+
+```bash
+# Quick health check
+vm-health-check
+
+# Continuous monitoring (30s refresh)
+vm-health-check --watch
+
+# Show memory trend analysis
+vm-health-check --trend
+```
+
+The health check will predict OOM events 30-60 minutes before they occur based on memory growth rate.
+
+---
+
 ## Claude CLI Memory Leak Mitigation
 
 Known issue: Claude CLI can consume 13-120GB+ during extended sessions.
@@ -293,4 +367,4 @@ done
 
 ---
 
-_Last updated: 2026-02-02 (ET)_
+_Last updated: 2026-02-02 (ET) - Added agent resilience features_
